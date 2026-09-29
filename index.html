@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#252a33">
+<title>Tap the Red Button</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Doto:wght@800&family=Hind:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one narrow column — arcade control panel (LCD strip + 2×3 push buttons) on top, per-tap time log below */
+:root {
+  --page: #e4e8ee;
+  --ink: #151a22;
+  --muted: #5a6474;
+  --line: #c6ccd7;
+  --card: #f3f5f8;
+  --raised: #ffffff;
+  --scrim: rgba(14, 17, 23, .58);
+  --accent: #2f5bea;
+  --accent-deep: #1a3899;
+  --on-accent: #ffffff;
+  --red-text: #c8170d;
+  --good: #14854a;
+  --ok: #b06f00;
+  --slow: #c2331f;
+  --flash: #ffeaa0;
+  --on-y: #3a2600;
+
+  /* the machine itself: same in both themes */
+  --panel-hi: #353b48;
+  --panel: #262b34;
+  --panel-lo: #181b21;
+  --collar-hi: #4b515c;
+  --collar: #16181d;
+  --collar-lo: #060708;
+  --bezel: #050608;
+  --etch: rgba(255, 255, 255, .38);
+  --steel-hi: #c9ced6;
+  --steel: #7d838e;
+  --steel-lo: #3a3e46;
+  --y-hi: #fff6c4;
+  --y: #ffc61a;
+  --y-mid: #f2a600;
+  --y-side: #b07000;
+  --r-hi: #ffc4b8;
+  --r: #ff2d1e;
+  --r-mid: #d4140a;
+  --r-side: #850904;
+  --r-glow: rgba(255, 48, 28, .6);
+  --lcd: #c3cdaa;
+  --lcd-lo: #a8b48e;
+  --lcd-ink: #1c2413;
+
+  --f-display: "Bungee", "Arial Black", Impact, sans-serif;
+  --f-body: "Hind", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-lcd: "Doto", "Courier New", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0d1015; --ink: #e8ecf3; --muted: #99a2b2; --line: #2a303b; --card: #161a21; --raised: #1b2029;
+    --scrim: rgba(0, 0, 0, .66); --accent: #5a7fff; --accent-deep: #2945b0; --red-text: #ff6b5d;
+    --good: #43c983; --ok: #f0b034; --slow: #ff6f5b; --flash: #4d3d0c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #0d1015; --ink: #e8ecf3; --muted: #99a2b2; --line: #2a303b; --card: #161a21; --raised: #1b2029;
+  --scrim: rgba(0, 0, 0, .66); --accent: #5a7fff; --accent-deep: #2945b0; --red-text: #ff6b5d;
+  --good: #43c983; --ok: #f0b034; --slow: #ff6f5b; --flash: #4d3d0c;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+body.playing { -webkit-user-select: none; user-select: none; }
+
+.app {
+  max-width: 460px;
+  margin: 0 auto;
+  padding-inline: 16px;
+  padding-block: max(14px, env(safe-area-inset-top, 0px)) max(28px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------- header ---------- */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { margin: 0; font: 400 clamp(21px, 6.4vw, 27px)/1 var(--f-display); letter-spacing: .01em; }
+.brand span { color: var(--red-text); }
+.tag { margin: 5px 0 0; color: var(--muted); font-size: 14px; line-height: 1.3; }
+.icon-btn {
+  flex: none; width: 44px; height: 44px; display: grid; place-items: center;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--card);
+}
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#sound .off { display: none; }
+#sound[aria-pressed="false"] .on { display: none; }
+#sound[aria-pressed="false"] .off { display: inline; }
+
+/* ---------- time limit ---------- */
+.modes {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;
+  border-radius: 14px; background: var(--card); border: 1px solid var(--line);
+}
+.modes input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.modes label {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 4px 7px; border-radius: 10px; cursor: pointer;
+  -webkit-user-select: none; user-select: none;
+  transition: background-color .15s, color .15s;
+}
+.modes .m { font-weight: 600; font-size: 14px; line-height: 1; }
+.modes .m b { font: 400 19px/1 var(--f-display); margin-right: 2px; }
+.modes small { font-size: 12px; line-height: 1.1; color: var(--muted); font-variant-numeric: tabular-nums; }
+.modes input:checked + label { background: var(--ink); color: var(--page); }
+.modes input:checked + label small { color: inherit; opacity: .72; }
+.modes input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+.modes input:disabled + label { cursor: default; }
+.modes input:disabled:not(:checked) + label { opacity: .45; }
+
+/* ---------- the machine ---------- */
+.machine {
+  position: relative;
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 22px 18px 14px;
+  border-radius: 26px;
+  background: linear-gradient(180deg, var(--panel-hi), var(--panel) 28%, var(--panel-lo));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .13),
+    inset 0 -3px 0 rgba(0, 0, 0, .35),
+    0 22px 36px -18px rgba(0, 0, 0, .55);
+}
+.screw {
+  position: absolute; width: 10px; height: 10px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--steel-hi), var(--steel) 55%, var(--steel-lo));
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .6);
+}
+.screw::after {
+  content: ""; position: absolute; left: 17%; right: 17%; top: calc(50% - 1px); height: 2px;
+  border-radius: 1px; background: rgba(0, 0, 0, .55); rotate: var(--a);
+}
+.screw.tl { top: 8px; left: 9px; --a: 35deg; }
+.screw.tr { top: 8px; right: 9px; --a: -20deg; }
+.screw.bl { bottom: 8px; left: 9px; --a: 80deg; }
+.screw.br { bottom: 8px; right: 9px; --a: 10deg; }
+
+.lcd {
+  display: grid; grid-template-columns: 1fr .8fr 1.2fr;
+  border: 3px solid var(--bezel); border-radius: 12px;
+  color: var(--lcd-ink);
+  background:
+    radial-gradient(rgba(28, 36, 19, .08) 1px, transparent 1.3px) 0 0 / 4px 4px,
+    linear-gradient(180deg, var(--lcd), var(--lcd-lo));
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, .3), 0 1px 0 rgba(255, 255, 255, .1);
+}
+.cell { min-width: 0; padding: 7px 10px 8px; display: flex; flex-direction: column; gap: 4px; }
+.cell + .cell { border-left: 1px dashed rgba(28, 36, 19, .28); }
+.lbl { font: 600 10px/1 var(--f-body); letter-spacing: .12em; text-transform: uppercase; opacity: .78; white-space: nowrap; }
+.val { font: 800 clamp(23px, 7.2vw, 31px)/1 var(--f-lcd); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.board {
+  position: relative;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: clamp(12px, 4.6vw, 24px);
+  padding: 8px 4px 4px;
+}
+body.playing .board { touch-action: none; }
+
+/* one arcade push button: collar (the button element), dark hole (::before), cap (.cap), light halo / burst ring (::after) */
+.ball {
+  --lift: 9px;
+  --side: var(--y-side);
+  --glow: transparent;
+  position: relative;
+  width: 100%; max-width: 118px; aspect-ratio: 1; justify-self: center;
+  margin: 0; padding: 0; border: 0; border-radius: 50%;
+  background: linear-gradient(180deg, var(--collar-hi), var(--collar) 50%, var(--collar-lo));
+  box-shadow: 0 4px 8px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .22);
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+.ball::before {
+  content: ""; position: absolute; inset: 8%; border-radius: 50%;
+  background: var(--bezel);
+  box-shadow: inset 0 5px 9px rgba(0, 0, 0, .9), 0 1px 0 rgba(255, 255, 255, .08);
+}
+.ball::after {
+  content: ""; position: absolute; inset: -12%; z-index: 1; border-radius: 50%;
+  pointer-events: none; opacity: 0;
+}
+.cap {
+  position: absolute; inset: 13%; z-index: 2; border-radius: 50%;
+  background: radial-gradient(circle at 38% 28%, var(--y-hi) 0 7%, var(--y) 36%, var(--y-mid) 74%, var(--y-side) 100%);
+  translate: 0 calc(var(--lift) * -1);
+  box-shadow:
+    0 var(--lift) 0 var(--side),
+    0 calc(var(--lift) + 2px) 5px rgba(0, 0, 0, .6),
+    0 0 26px 7px var(--glow),
+    inset 0 -6px 10px rgba(110, 50, 0, .28),
+    inset 0 2px 1px rgba(255, 255, 255, .6);
+  transition: translate 70ms ease-out, box-shadow 120ms ease-out;
+  pointer-events: none;
+}
+.cap::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 38% 28%, var(--r-hi) 0 7%, var(--r) 36%, var(--r-mid) 74%, var(--r-side) 100%);
+  opacity: 0; transition: opacity 160ms ease-out;
+}
+.cap::after {
+  content: ""; position: absolute; left: 21%; right: 21%; top: 7%; height: 36%; border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(255, 255, 255, 0));
+}
+
+.ball.down { --lift: 2px; }
+
+.ball.lit { --side: var(--r-side); --glow: var(--r-glow); }
+.ball.lit .cap { animation: pop 170ms cubic-bezier(.3, 1.7, .5, 1); }
+.ball.lit .cap::before { opacity: 1; transition: none; }
+.ball.lit::after {
+  opacity: 1;
+  background: radial-gradient(circle, var(--r-glow) 0 40%, transparent 70%);
+  animation: halo .8s ease-in-out infinite alternate;
+}
+.ball.hit::after { border: 3px solid var(--r); animation: burst .38s ease-out; }
+.ball.miss { animation: shake .28s ease-in-out; }
+.ball.miss .cap { filter: saturate(.35) brightness(.8); }
+.ball:focus-visible { outline: 3px solid var(--y-hi); outline-offset: 4px; }
+body.counting .ball { filter: brightness(.55); }
+
+@keyframes pop { from { scale: .82; } to { scale: 1; } }
+@keyframes halo { from { scale: .94; opacity: .7; } to { scale: 1.06; opacity: 1; } }
+@keyframes burst { from { opacity: 1; scale: .72; } to { opacity: 0; scale: 1.28; } }
+@keyframes shake {
+  0%, 100% { translate: 0; } 20% { translate: -5px; } 40% { translate: 5px; } 60% { translate: -3px; } 80% { translate: 3px; }
+}
+
+.count {
+  position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; pointer-events: none;
+  font: 400 clamp(58px, 20vw, 96px)/1 var(--f-display); color: var(--y-hi);
+  text-shadow: 0 5px 0 rgba(0, 0, 0, .55), 0 0 32px rgba(0, 0, 0, .7);
+}
+.count.pop { animation: countpop .45s ease-out; }
+@keyframes countpop { from { scale: 1.45; opacity: 0; } 35% { opacity: 1; } to { scale: 1; opacity: 1; } }
+
+.plate {
+  display: flex; justify-content: space-between; gap: 12px; padding-inline: 8px;
+  font: 600 10px/1 var(--f-body); letter-spacing: .16em; text-transform: uppercase; color: var(--etch);
+}
+
+/* ---------- start / stop ---------- */
+.controls { padding-top: 6px; }
+.key {
+  --lift: 6px;
+  display: block; width: 100%;
+  border: 0; border-radius: 16px; padding: 15px 16px 13px;
+  font: 400 20px/1 var(--f-display); letter-spacing: .06em; color: var(--on-accent);
+  background: linear-gradient(180deg, var(--accent), var(--accent-deep) 170%);
+  translate: 0 calc(var(--lift) * -1);
+  box-shadow:
+    0 var(--lift) 0 var(--accent-deep),
+    0 calc(var(--lift) + 8px) 16px -6px rgba(0, 0, 0, .45),
+    inset 0 1px 0 rgba(255, 255, 255, .35);
+  transition: translate 70ms ease-out, box-shadow 70ms ease-out;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+}
+.key:active { --lift: 1px; }
+.key:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.ghost {
+  display: block; width: 100%; padding: 13px 16px; border-radius: 16px;
+  border: 1.5px solid var(--line); background: transparent; font-weight: 600; font-size: 16px;
+}
+.ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- per-tap log ---------- */
+.log { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; scroll-margin-top: 16px; }
+.log-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; }
+.log h2 { margin: 0; font: 700 18px/1.2 var(--f-body); }
+.legend { display: flex; gap: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+.dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.fast { --c: var(--good); }
+.ok { --c: var(--ok); }
+.slow { --c: var(--slow); }
+.sum { margin: 0; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.empty { margin: 0; padding: 14px; border: 1.5px dashed var(--line); border-radius: 14px; color: var(--muted); font-size: 15px; }
+.chips {
+  list-style: none; margin: 0; padding: 2px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px;
+  max-height: min(46vh, 360px); overflow-y: auto; overscroll-behavior: contain;
+}
+.chip {
+  display: flex; align-items: center; gap: 6px; padding: 7px 9px;
+  border-radius: 10px; background: var(--card); border: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.chip .t { font-weight: 700; font-size: 16px; line-height: 1.1; }
+.chip .t small { font-weight: 500; font-size: 12px; color: var(--muted); margin-left: 1px; }
+.chip .n { margin-left: auto; font-size: 12px; color: var(--muted); }
+.chip.new { animation: chipin .35s ease-out; }
+.chip.top { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+@keyframes chipin { from { background: var(--flash); scale: .9; } to { scale: 1; } }
+
+/* ---------- result sheet ---------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  background: var(--scrim);
+}
+@media (min-width: 600px) { .overlay { align-items: center; } }
+.sheet {
+  width: 100%; max-width: 430px; max-height: 100%; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 22px 20px 20px; border-radius: 24px;
+  background: var(--raised); color: var(--ink);
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .5);
+  animation: rise .24s cubic-bezier(.2, .9, .3, 1);
+}
+@keyframes rise { from { translate: 0 40px; opacity: 0; } }
+.eyebrow { margin: 0; font: 600 12px/1 var(--f-body); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.res-head { margin: 0; font: 600 20px/1.3 var(--f-body); text-wrap: balance; }
+.res-head .num { display: block; margin-block: 4px 2px; font: 400 clamp(46px, 14vw, 62px)/1 var(--f-display); color: var(--red-text); }
+.verdict { margin: 0; color: var(--muted); font-size: 15px; }
+.record {
+  align-self: flex-start; margin: 0; padding: 5px 10px 3px; border-radius: 999px;
+  background: var(--y); color: var(--on-y); font: 400 13px/1.2 var(--f-display); letter-spacing: .04em;
+}
+.stats {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0;
+  background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+}
+.stats div { background: var(--raised); padding: 10px 12px; min-width: 0; }
+.stats dt { font-size: 12px; color: var(--muted); }
+.stats dd { margin: 2px 0 0; font: 700 19px/1.2 var(--f-body); font-variant-numeric: tabular-nums; }
+.sheet-actions { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ball, .ball::after, .cap, .count, .chip, .sheet { animation: none !important; }
+  .ball.lit::after { opacity: .9; }
+}
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="top">
+    <div>
+      <h1 class="brand">Tap the <span>Red</span></h1>
+      <p class="tag">Red ball dikhte hi tap karo. Yellow pe tap = galat tap.</p>
+    </div>
+    <button id="sound" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+        <path class="on" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+        <path class="off" d="M17 9.5l5 5M22 9.5l-5 5"/>
+      </svg>
+    </button>
+  </header>
+
+  <div class="modes" role="radiogroup" aria-label="Time limit">
+    <input type="radio" name="mode" id="m10" value="10" checked>
+    <label for="m10"><span class="m"><b>10</b> sec</span><small id="b10">best –</small></label>
+    <input type="radio" name="mode" id="m30" value="30">
+    <label for="m30"><span class="m"><b>30</b> sec</span><small id="b30">best –</small></label>
+    <input type="radio" name="mode" id="m60" value="60">
+    <label for="m60"><span class="m"><b>60</b> sec</span><small id="b60">best –</small></label>
+  </div>
+
+  <section class="machine" aria-label="Game board">
+    <i class="screw tl"></i><i class="screw tr"></i><i class="screw bl"></i><i class="screw br"></i>
+    <div class="lcd">
+      <div class="cell"><span class="lbl">Time left</span><span class="val" id="vTime">10.0</span></div>
+      <div class="cell"><span class="lbl">Balls</span><span class="val" id="vHits">0</span></div>
+      <div class="cell"><span class="lbl">Last (sec)</span><span class="val" id="vLast">-.---</span></div>
+    </div>
+    <div class="board" id="board">
+      <button class="ball" type="button" aria-label="Ball 1"><span class="cap"></span></button>
+      <button class="ball" type="button" aria-label="Ball 2"><span class="cap"></span></button>
+      <button class="ball" type="button" aria-label="Ball 3"><span class="cap"></span></button>
+      <button class="ball" type="button" aria-label="Ball 4"><span class="cap"></span></button>
+      <button class="ball" type="button" aria-label="Ball 5"><span class="cap"></span></button>
+      <button class="ball" type="button" aria-label="Ball 6"><span class="cap"></span></button>
+      <div class="count" id="count" aria-live="assertive"></div>
+    </div>
+    <div class="plate"><span>RT-6 Reaction Trainer</span><span>Gap 0.25–0.90 s</span></div>
+  </section>
+
+  <div class="controls">
+    <button class="key" id="start" type="button">Start</button>
+    <button class="ghost" id="stop" type="button" hidden>Stop</button>
+  </div>
+
+  <section class="log" id="log" aria-labelledby="logTitle">
+    <div class="log-head">
+      <h2 id="logTitle">Har tap ka time</h2>
+      <div class="legend" aria-label="Colour key">
+        <span class="fast"><i class="dot"></i>&lt;0.40</span>
+        <span class="ok"><i class="dot"></i>&lt;0.60</span>
+        <span class="slow"><i class="dot"></i>slow</span>
+      </div>
+    </div>
+    <p class="sum" id="sum">Time limit chuno aur Start dabao.</p>
+    <p class="empty" id="logEmpty">Har red ball tap karte hi uska time (second mein) yahan line se likha jayega: 1st, 2nd, 3rd…</p>
+    <ol class="chips" id="chips"></ol>
+  </section>
+</main>
+
+<div class="overlay" id="result" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="resHead">
+    <p class="eyebrow" id="resMode">Result · 10 second mode</p>
+    <h2 class="res-head" id="resHead"><span id="resTime">10</span> second mein <strong class="num"><span id="resHits">0</span> ball</strong> click kiye</h2>
+    <p class="record" id="resRecord" hidden>Naya record!</p>
+    <p class="verdict" id="resVerdict"></p>
+    <dl class="stats">
+      <div><dt>Average time</dt><dd id="sAvg">–</dd></div>
+      <div><dt>Sabse fast</dt><dd id="sFast">–</dd></div>
+      <div><dt>Sabse slow</dt><dd id="sSlow">–</dd></div>
+      <div><dt>Speed</dt><dd id="sRate">–</dd></div>
+      <div><dt>Galat tap</dt><dd id="sMiss">0</dd></div>
+      <div><dt>Is mode ka best</dt><dd id="sBest">–</dd></div>
+    </dl>
+    <div class="sheet-actions">
+      <button class="key" id="again" type="button">Phir se khelo</button>
+      <button class="ghost" id="seeLog" type="button">Har tap ka time dekho</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const MODES = [10, 30, 60];
+  const GAP_MIN = 250;   // red ball ke beech ka wait (ms): hamesha 1 second se kam
+  const GAP_MAX = 900;
+  const COUNT_STEP = 550;
+  const STORE = 'tap-the-red.v1';
+
+  const $ = (id) => document.getElementById(id);
+  const balls = Array.from(document.querySelectorAll('.ball'));
+  const modeInputs = Array.from(document.querySelectorAll('input[name="mode"]'));
+  const ui = {
+    time: $('vTime'), hits: $('vHits'), last: $('vLast'),
+    start: $('start'), stop: $('stop'), count: $('count'), board: $('board'),
+    log: $('log'), chips: $('chips'), empty: $('logEmpty'), sum: $('sum'),
+    sound: $('sound'), result: $('result'), again: $('again'), seeLog: $('seeLog'),
+  };
+
+  // ---------- saved settings + records (per browser) ----------
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { saved = {}; }
+  const best = saved.best && typeof saved.best === 'object' ? saved.best : {};
+  let mode = MODES.includes(saved.mode) ? saved.mode : 10;
+  let soundOn = saved.sound !== false;
+  function persist() {
+    try { localStorage.setItem(STORE, JSON.stringify({ best, mode, sound: soundOn })); } catch (e) { /* storage blocked */ }
+  }
+
+  // ---------- sound + vibration ----------
+  let ac = null;
+  function audio() {
+    if (!soundOn) return null;
+    try {
+      if (!ac) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        ac = new Ctx();
+      }
+      if (ac.state === 'suspended') ac.resume();
+    } catch (e) { return null; }
+    return ac;
+  }
+  function tone(freq, dur, type, vol, slideTo) {
+    const a = audio();
+    if (!a) return;
+    const t = a.currentTime;
+    const o = a.createOscillator();
+    const g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(a.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+  const sfx = {
+    hit: () => tone(940, 0.09, 'triangle', 0.28, 470),
+    miss: () => tone(140, 0.16, 'square', 0.07),
+    tick: () => tone(620, 0.07, 'sine', 0.2),
+    go: () => tone(990, 0.16, 'sine', 0.24),
+    end: () => { tone(660, 0.14, 'triangle', 0.22); setTimeout(() => tone(880, 0.24, 'triangle', 0.22), 150); },
+  };
+  function buzz(pattern) {
+    try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* not allowed */ }
+  }
+
+  // ---------- game state ----------
+  let state = 'idle';            // idle | countdown | playing | over
+  let lit = -1;                  // index of the red ball, -1 = none
+  let prev = -1;                 // last red position, so the next one is always somewhere else
+  let litAt = 0;
+  let endAt = 0;
+  let times = [];                // reaction time of every red tap, in ms
+  let misses = 0;
+  let gapTimer = 0;
+  let raf = 0;
+  let countTimers = [];
+
+  const fmt = (ms) => (ms / 1000).toFixed(3);
+  const speedClass = (ms) => (ms < 400 ? 'fast' : ms < 600 ? 'ok' : 'slow');
+  const average = () => (times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0);
+
+  function showTime(ms) {
+    ui.time.textContent = (Math.ceil(Math.max(ms, 0) / 100) / 10).toFixed(1);
+  }
+  function renderBest() {
+    MODES.forEach((m) => {
+      const b = best[m];
+      $('b' + m).textContent = b ? 'best ' + b.hits : 'best –';
+    });
+  }
+  function summary() {
+    return times.length + ' ball · average ' + fmt(average()) + ' s · galat tap ' + misses;
+  }
+  function updateSum() {
+    ui.sum.textContent = times.length || misses ? summary() : 'Red ball ka intezaar karo…';
+  }
+
+  function setState(next) {
+    state = next;
+    const busy = next === 'countdown' || next === 'playing';
+    document.body.classList.toggle('playing', busy);
+    document.body.classList.toggle('counting', next === 'countdown');
+    ui.start.hidden = busy;
+    ui.stop.hidden = !busy;
+    ui.start.textContent = next === 'over' ? 'Phir se khelo' : 'Start';
+    modeInputs.forEach((inp) => { inp.disabled = busy; });
+  }
+
+  function clearRound() {
+    clearTimeout(gapTimer);
+    cancelAnimationFrame(raf);
+    countTimers.forEach(clearTimeout);
+    countTimers = [];
+    ui.count.textContent = '';
+    if (lit >= 0) balls[lit].classList.remove('lit');
+    lit = -1;
+  }
+
+  function flashCount(text) {
+    ui.count.textContent = text;
+    ui.count.classList.remove('pop');
+    void ui.count.offsetWidth;
+    ui.count.classList.add('pop');
+  }
+
+  function start() {
+    if (state === 'countdown' || state === 'playing') return;
+    audio();
+    hideResult(false);
+    clearRound();
+    times = [];
+    misses = 0;
+    prev = -1;
+    ui.chips.textContent = '';
+    ui.empty.hidden = true;
+    ui.hits.textContent = '0';
+    ui.last.textContent = '-.---';
+    showTime(mode * 1000);
+    ui.sum.textContent = 'Ready… red ball ka intezaar karo.';
+    setState('countdown');
+    ui.stop.focus({ preventScroll: true });
+    ['3', '2', '1'].forEach((n, k) => {
+      countTimers.push(setTimeout(() => { flashCount(n); sfx.tick(); }, k * COUNT_STEP));
+    });
+    countTimers.push(setTimeout(() => { flashCount('GO'); sfx.go(); begin(); }, 3 * COUNT_STEP));
+    countTimers.push(setTimeout(() => { ui.count.textContent = ''; }, 3 * COUNT_STEP + 320));
+  }
+
+  function begin() {
+    setState('playing');
+    endAt = performance.now() + mode * 1000;
+    scheduleNext();
+    raf = requestAnimationFrame(loop);
+  }
+
+  function loop() {
+    const left = endAt - performance.now();
+    if (left <= 0) { finish(); return; }
+    showTime(left);
+    raf = requestAnimationFrame(loop);
+  }
+
+  function scheduleNext() {
+    const wait = GAP_MIN + Math.random() * (GAP_MAX - GAP_MIN);
+    gapTimer = setTimeout(lightUp, wait);
+  }
+
+  function lightUp() {
+    if (state !== 'playing') return;
+    let i;
+    do { i = Math.floor(Math.random() * balls.length); } while (i === prev);
+    prev = i;
+    lit = i;
+    const b = balls[i];
+    b.classList.remove('hit', 'miss');
+    b.classList.add('lit');
+    b.setAttribute('aria-label', 'Ball ' + (i + 1) + ', red: tap karo');
+    litAt = performance.now();
+    requestAnimationFrame(() => { if (lit === i) litAt = performance.now(); });
+  }
+
+  function tap(i) {
+    if (state !== 'playing') return;
+    const b = balls[i];
+    if (i === lit) {
+      const rt = performance.now() - litAt;
+      lit = -1;
+      b.classList.remove('lit');
+      b.setAttribute('aria-label', 'Ball ' + (i + 1));
+      b.classList.remove('hit');
+      void b.offsetWidth;
+      b.classList.add('hit');
+      clearTimeout(b._hitTimer);
+      b._hitTimer = setTimeout(() => b.classList.remove('hit'), 400);
+      times.push(rt);
+      sfx.hit();
+      buzz(12);
+      addChip(times.length, rt);
+      ui.hits.textContent = String(times.length);
+      ui.last.textContent = fmt(rt);
+      updateSum();
+      scheduleNext();
+    } else {
+      misses += 1;
+      b.classList.remove('miss');
+      void b.offsetWidth;
+      b.classList.add('miss');
+      clearTimeout(b._missTimer);
+      b._missTimer = setTimeout(() => b.classList.remove('miss'), 300);
+      sfx.miss();
+      buzz([8, 40, 8]);
+      updateSum();
+    }
+  }
+
+  function addChip(n, rt) {
+    const li = document.createElement('li');
+    li.className = 'chip new ' + speedClass(rt);
+    li.innerHTML = '<i class="dot"></i><span class="t">' + fmt(rt) + '<small>s</small></span><span class="n">#' + n + '</span>';
+    ui.chips.appendChild(li);
+    ui.chips.scrollTop = ui.chips.scrollHeight;
+  }
+
+  function verdict(n, avg) {
+    if (!n) return 'Ek bhi red ball tap nahi hua. Agli baar red dikhte hi tap karo.';
+    if (avg < 350) return 'Bahut tez reflex. Aise hi speed banaye rakho.';
+    if (avg < 450) return 'Achha reflex. Thodi aur practice se speed aur badhegi.';
+    if (avg < 600) return 'Theek hai. Board pe nazar rakho, red aate hi tap karo.';
+    return 'Speed badhao. Ungli balls ke paas rakho aur red dikhte hi tap karo.';
+  }
+
+  function finish() {
+    clearRound();
+    showTime(0);
+    setState('over');
+    sfx.end();
+    buzz([30, 60, 30]);
+
+    const n = times.length;
+    const avg = average();
+    const fastest = n ? Math.min(...times) : 0;
+    const slowest = n ? Math.max(...times) : 0;
+    const old = best[mode];
+    const isRecord = n > 0 && (!old || n > old.hits || (n === old.hits && avg < old.avg));
+    if (isRecord) {
+      best[mode] = { hits: n, avg: Math.round(avg) };
+      persist();
+      renderBest();
+    }
+    if (n) ui.chips.children[times.indexOf(fastest)].classList.add('top');
+    ui.sum.textContent = n ? summary() + ' · green border = sabse fast' : 'Is round mein koi red ball tap nahi hua.';
+    if (!n) ui.empty.hidden = false;
+
+    $('resMode').textContent = 'Result · ' + mode + ' second mode';
+    $('resTime').textContent = String(mode);
+    $('resHits').textContent = String(n);
+    $('resRecord').hidden = !isRecord;
+    $('resVerdict').textContent = verdict(n, avg);
+    $('sAvg').textContent = n ? fmt(avg) + ' s' : '–';
+    $('sFast').textContent = n ? fmt(fastest) + ' s' : '–';
+    $('sSlow').textContent = n ? fmt(slowest) + ' s' : '–';
+    $('sRate').textContent = (n / mode).toFixed(2) + ' ball/sec';
+    $('sMiss').textContent = String(misses);
+    $('sBest').textContent = best[mode] ? best[mode].hits + ' ball' : '–';
+    ui.result.hidden = false;
+    ui.again.focus({ preventScroll: true });
+  }
+
+  function stop() {
+    if (state !== 'countdown' && state !== 'playing') return;
+    clearRound();
+    setState('idle');
+    showTime(mode * 1000);
+    ui.start.focus({ preventScroll: true });
+    if (times.length) {
+      ui.sum.textContent = summary() + ' · beech mein roka';
+    } else {
+      ui.sum.textContent = 'Game roka gaya. Start dabao aur phir se try karo.';
+      ui.empty.hidden = false;
+    }
+  }
+
+  function hideResult(restoreFocus) {
+    if (ui.result.hidden) return;
+    ui.result.hidden = true;
+    if (restoreFocus) ui.start.focus({ preventScroll: true });
+  }
+
+  // ---------- wiring ----------
+  balls.forEach((b, i) => {
+    const release = () => b.classList.remove('down');
+    b.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      b.classList.add('down');
+      tap(i);
+    });
+    b.addEventListener('pointerup', release);
+    b.addEventListener('pointercancel', release);
+    b.addEventListener('pointerleave', release);
+    // keyboard (Enter / Space) fires a click with detail 0; pointer taps are already handled above
+    b.addEventListener('click', (e) => {
+      if (e.detail !== 0) return;
+      b.classList.add('down');
+      setTimeout(release, 90);
+      tap(i);
+    });
+  });
+  ui.board.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  ui.start.addEventListener('click', start);
+  ui.stop.addEventListener('click', stop);
+  ui.again.addEventListener('click', start);
+  ui.seeLog.addEventListener('click', () => {
+    hideResult(false);
+    ui.log.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  ui.result.addEventListener('click', (e) => { if (e.target === ui.result) hideResult(true); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideResult(true); });
+
+  modeInputs.forEach((inp) => {
+    inp.checked = Number(inp.value) === mode;
+    inp.addEventListener('change', () => {
+      if (!inp.checked) return;
+      mode = Number(inp.value);
+      persist();
+      if (state !== 'countdown' && state !== 'playing') showTime(mode * 1000);
+    });
+  });
+
+  function renderSound() {
+    ui.sound.setAttribute('aria-pressed', String(soundOn));
+    ui.sound.setAttribute('aria-label', soundOn ? 'Sound on' : 'Sound off');
+  }
+  ui.sound.addEventListener('click', () => {
+    soundOn = !soundOn;
+    renderSound();
+    persist();
+    if (soundOn) tone(880, 0.08, 'sine', 0.18);
+  });
+
+  renderSound();
+  renderBest();
+  showTime(mode * 1000);
+})();
+</script>
+</body>
+</html>
