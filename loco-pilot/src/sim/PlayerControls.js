@@ -203,8 +203,11 @@ export class PlayerControls {
       if (an.brakeRate > 0) this.applyTrainBrake(dt * an.brakeRate);
       else this.releaseTrainBrake(dt * -an.brakeRate);
     }
-    if (an.touchThrottle != null) this.setNotch(Math.round(an.touchThrottle));
-    if (an.touchBrake != null) this.setA9(an.touchBrake);
+    // touch sliders act only when moved, so ATP / emergency / keyboard changes are not overwritten every frame
+    if (an.touchThrottle != null && an.touchThrottleSeq !== this.touchThrottleSeq) this.setNotch(Math.round(an.touchThrottle));
+    if (an.touchBrake != null && an.touchBrakeSeq !== this.touchBrakeSeq) this.setA9(an.touchBrake);
+    this.touchThrottleSeq = an.touchThrottleSeq;
+    this.touchBrakeSeq = an.touchBrakeSeq;
     // horn & sander
     const hornHigh = input.isDown('horn'), hornLow = input.isDown('hornLow');
     const prevHorn = p.horn;

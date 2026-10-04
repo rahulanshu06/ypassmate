@@ -243,15 +243,15 @@ export class CabView {
     };
     this.emBtn = mkButton(0.42, 9.3, 0xd32f2f, 0.04, 'emergency', 'EMERGENCY BRAKE (Space)', 'EMERG');
     this.hornBtn = mkButton(0.86, 9.3, 0xf9a825, 0.03, 'horn', 'Horn — hold (H high / J low)', 'HORN');
-    this.vcdBtn = mkButton(-0.3, 9.3, 0x1e88e5, 0.035, 'vcd', 'VCD acknowledge (Q)', 'VCD');
-    // toggle switches row near the windscreen
+    this.vcdBtn = mkButton(0.64, 9.28, 0x1e88e5, 0.035, 'vcd', 'VCD acknowledge (Q)', 'VCD');
+    // toggle switches row on the driver's desk, below the windscreen
     this.switches = {};
     const sw = [
       ['panto', 'PANTO', 'Pantograph raise/lower (O)'], ['vcb', 'VCB', 'Main circuit breaker (M)'], ['headlight', 'H/LIGHT', 'Headlight off/dim/bright (L)'],
       ['wiper', 'WIPER', 'Wipers off/slow/fast (V)'], ['cablight', 'CAB LT', 'Cab light (I)'], ['sander', 'SAND', 'Sander — hold (X)'],
     ];
     sw.forEach(([id, label, tip], i) => {
-      const x = -0.2 - i * 0.13, z = 9.44;
+      const x = 1.0 - i * 0.12, z = 9.52;
       const base = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.06), ctrlMat(0x1b1c1e));
       base.position.set(x, 2.77, z);
       const lever = new THREE.Group();
@@ -312,7 +312,7 @@ export class CabView {
   addLabel(text, x, y, z, w, h) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: labelTexture(text), toneMapped: true }));
     m.position.set(x, y + 0.001, z);
-    m.rotation.x = -Math.PI / 2;
+    m.rotation.set(-Math.PI / 2, 0, Math.PI); // text reads left-to-right, top away from the driver
     this.group.add(m);
   }
 

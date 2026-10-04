@@ -345,10 +345,10 @@ export class Atmosphere {
     u.uMoonDir.value.copy(this.moonDir);
     u.uZenith.value.copy(zen);
     u.uHorizon.value.copy(hor);
-    u.uSunColor.value.copy(sunCol).multiplyScalar(clamp(sunVisible, 0, 1));
+    u.uSunColor.value.copy(sunCol).multiplyScalar(clamp(sunVisible, 0, 1) * (1 - overcastAmt * 0.6));
     u.uGround.value.copy(hor).multiplyScalar(0.55);
     const day = this.daylightFactor(elDeg);
-    u.uCloudLit.value.copy(new THREE.Color('#f4f1ea').multiplyScalar(0.06 + 0.94 * day)).lerp(sunCol, elDeg < 12 && elDeg > -4 ? 0.45 : 0.05).multiplyScalar(1 - 0.45 * W.rain);
+    u.uCloudLit.value.copy(new THREE.Color('#f4f1ea').multiplyScalar(0.06 + 0.94 * day)).lerp(sunCol, (elDeg < 12 && elDeg > -4 ? 0.45 : 0.05) * (1 - overcastAmt * 0.75)).multiplyScalar(1 - 0.45 * W.rain);
     u.uCloudDark.value.copy(new THREE.Color('#8b93a0').multiplyScalar(0.04 + 0.7 * day)).multiplyScalar(1 - 0.5 * W.rain - 0.2 * W.lightning);
     u.uTime.value = time;
     u.uCloud.value = overcast;
@@ -363,7 +363,7 @@ export class Atmosphere {
     const flash = this.flash;
     if (useMoon) {
       this.sun.color.set('#9fb4e6');
-      this.sun.intensity = 0.16 * night * (1 - overcastAmt * 0.8) + flash * 2.5;
+      this.sun.intensity = 0.32 * night * (1 - overcastAmt * 0.8) + flash * 2.5;
     } else {
       this.sun.color.copy(sunCol);
       this.sun.intensity = lightI + flash * 2.5;
@@ -371,7 +371,7 @@ export class Atmosphere {
     this.hemi.color.copy(zen).lerp(new THREE.Color('#e8eef5'), 0.62);
     this.hemi.groundColor.set('#6a5a40').multiplyScalar(0.25 + 0.75 * day);
     this.hemi.intensity = 0.18 + 0.62 * day + flash * 1.5 + night * 0.1;
-    this.ambient.intensity = night * 0.25;
+    this.ambient.intensity = night * 0.4;
 
     // fog
     const fogDensity = W.fog + W.rain * 0.0007 + W.dust * 0.0012;
@@ -380,10 +380,11 @@ export class Atmosphere {
     if (night > 0.5) this.fogColor.lerp(new THREE.Color('#0d1320'), 0.5);
     FOG.params.x = fogHeavy > 0.3 ? 0.006 : 0.016 - 0.008 * W.rain;
     FOG.params.y = focus ? focus.y - 4 : 78;
-    FOG.params.z = 0.85 * (1 - overcastAmt) * this.daylightFactor(elDeg);
+    FOG.params.z = 0.75 * (1 - overcastAmt) * (1 - 0.6 * fogHeavy) * this.daylightFactor(elDeg);
     FOG.params.w = 1.0;
     FOG.sun.x = this.sunDir.x; FOG.sun.y = this.sunDir.y; FOG.sun.z = this.sunDir.z;
-    FOG.sunColor.x = sunCol.r; FOG.sunColor.y = sunCol.g; FOG.sunColor.z = sunCol.b;
+    const fsc = sunCol.clone().lerp(new THREE.Color('#e9e4dc').multiplyScalar(0.3 + 0.7 * this.daylightFactor(elDeg)), Math.max(fogHeavy, overcastAmt) * 0.8);
+    FOG.sunColor.x = fsc.r; FOG.sunColor.y = fsc.g; FOG.sunColor.z = fsc.b;
 
     // shadow camera follows the focus point with texel snapping
     if (focus) {

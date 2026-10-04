@@ -73,6 +73,8 @@ export class Journey {
     player.limits = net.limitsForPath(path);
     player.traction.slipControl = this.difficulty.slipControl;
     player.doorsOpen = true;
+    // trainees and cold-start crews switch the headlight on themselves
+    if (c.tutorial || !this.difficulty.autoStart) player.headlight = 0;
     this.player = player;
     this.trains.push(player);
     this.departure = c.startHours + startup / 60;
@@ -229,6 +231,17 @@ export class Journey {
       }
     }
     return true;
+  }
+
+  /** Bring the booked departure forward so it falls `minutes` from now (training: no long idle wait). */
+  advanceDeparture(minutes) {
+    if (this.ops.state !== 'origin' || this.ops.originRA) return;
+    const delta = this.clock + minutes / 60 - this.departure;
+    if (delta >= 0) return;
+    this.departure += delta;
+    for (const r of this.timetable.rows) {
+      for (const k of ['sched', 'arr', 'dep', 'pass']) if (typeof r[k] === 'number') r[k] += delta;
+    }
   }
 
   setWeather(id, seconds = 60) {

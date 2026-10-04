@@ -198,24 +198,16 @@ function billboardAtlas() {
   types.forEach((t, i) => {
     const x0 = (i % 8) * cell, y0 = Math.floor(i / 8) * cell;
     const T = TREE_TYPES[t];
-    const scale = cell / Math.max(T.h * 1.1, T.r * 2.3);
-    const cx = x0 + cell / 2, base = y0 + cell - 2;
+    const size = Math.max(T.h * 1.1, T.r * 2.3);
+    const scale = cell / size;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, y0, cell, cell);
+    ctx.clip();
+    const cx = x0 + cell / 2, base = y0 + cell - 1;
     ctx.fillStyle = t === 'eucalyptus' ? '#c9c3b4' : '#4b3a2c';
-    const trunkH = t === 'palm' ? T.h * 0.85 : t === 'eucalyptus' ? T.h * 0.6 : T.h * 0.4;
+    const trunkH = t === 'palm' ? T.h * 0.85 : t === 'eucalyptus' ? T.h * 0.62 : t === 'sal' ? T.h * 0.55 : T.h * 0.4;
     ctx.fillRect(cx - 2, base - trunkH * scale, 4, trunkH * scale);
-    const blobs = t === 'palm' ? 0 : 60;
-    const cyTop = base - T.h * scale * 0.68;
-    for (let k = 0; k < blobs; k++) {
-      const a = rng.next() * Math.PI * 2, rr = Math.sqrt(rng.next());
-      const w = T.r * scale * (t === 'babool' ? 1.2 : 0.9), hgt = T.h * scale * (t === 'babool' ? 0.12 : t === 'eucalyptus' ? 0.35 : 0.3);
-      const x = cx + Math.cos(a) * rr * w, y = cyTop + Math.sin(a) * rr * hgt;
-      const shade = 0.55 + 0.45 * (1 - (y - (cyTop - hgt)) / (2 * hgt));
-      const g = t === 'mango' ? [30, 58, 20] : t === 'babool' ? [80, 95, 50] : t === 'eucalyptus' ? [85, 110, 70] : [55, 90, 35];
-      ctx.fillStyle = `rgb(${g[0] * shade},${g[1] * shade},${g[2] * shade})`;
-      ctx.beginPath();
-      ctx.arc(x, y, (6 + rng.next() * 8) * (scale / 9), 0, Math.PI * 2);
-      ctx.fill();
-    }
     if (t === 'palm') {
       ctx.strokeStyle = '#4a6a2a';
       ctx.lineWidth = 3;
@@ -227,12 +219,60 @@ function billboardAtlas() {
         ctx.quadraticCurveTo(cx + Math.cos(a) * 14, top - 8, cx + Math.cos(a) * 26, top + 10 + Math.abs(Math.sin(a)) * 6);
         ctx.stroke();
       }
+    } else {
+      // canopy ellipse filled with leafy blobs, lit from above
+      const crownH = t === 'babool' ? T.h * 0.22 : t === 'eucalyptus' ? T.h * 0.42 : t === 'bush' ? T.h * 0.8 : t === 'sal' ? T.h * 0.5 : T.h * 0.55;
+      const crownCy = base - (T.h - crownH / 2) * scale;
+      const rx = Math.min(cell / 2 - 3, T.r * scale * 0.95), ry = (crownH * scale) / 2;
+      const g = t === 'mango' ? [42, 74, 28] : t === 'babool' ? [96, 110, 58] : t === 'eucalyptus' ? [92, 118, 76] : t === 'sal' ? [46, 82, 34] : [62, 100, 40];
+      for (let k = 0; k < 140; k++) {
+        const a = rng.next() * Math.PI * 2, rr = Math.sqrt(rng.next());
+        const x = cx + Math.cos(a) * rr * rx * 0.85, y = crownCy + Math.sin(a) * rr * ry * 0.85;
+        const shade = 0.6 + 0.55 * (1 - (y - (crownCy - ry)) / (2 * ry)) + (rng.next() - 0.5) * 0.15;
+        ctx.fillStyle = `rgb(${Math.min(255, g[0] * shade)},${Math.min(255, g[1] * shade)},${Math.min(255, g[2] * shade)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(2, Math.min(rx, ry) * (0.18 + rng.next() * 0.22)), 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
+    ctx.restore();
   });
-  const tex = new THREE.CanvasTexture(c);
+  // Dilate colours into transparent texels so mipmaps do not darken the edges.
+  const img = ctx.getImageData(0, 0, W, H);
+  const d = img.data;
+  const out = new Uint8Array(d.length);
+  out.set(d);
+  for (let pass = 0; pass < 6; pass++) {
+    const src = out.slice();
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      if (src[i + 3] > 8) continue;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+        const j = (yy * W + xx) * 4;
+        if (src[j + 3] > 8 || (src[j] | src[j + 1] | src[j + 2])) {
+          r += src[j]; g += src[j + 1]; b += src[j + 2]; n++;
+        }
+      }
+      if (n) {
+        out[i] = r / n; out[i + 1] = g / n; out[i + 2] = b / n;
+      }
+    }
+  }
+  for (let i = 0; i < out.length; i += 4) {
+    if (out[i + 3] <= 8 && !(out[i] | out[i + 1] | out[i + 2])) {
+      out[i] = 58; out[i + 1] = 88; out[i + 2] = 38;
+    }
+  }
+  const tex = new THREE.DataTexture(out, W, H, THREE.RGBAFormat);
+  tex.flipY = true;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
   return { tex, types };
 }
 

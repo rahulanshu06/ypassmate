@@ -131,9 +131,16 @@ export class Safety {
       }
       if (speed > permit) {
         this.atpActive = true;
+        if (!this.atpHold) this.atpHold = { driverA9: p.brakes.a9, a9: 0 };
         p.brakes.a9 = Math.max(p.brakes.a9, clamp((speed - permit) * 1.2 + 0.3, 0.3, 1));
+        this.atpHold.a9 = p.brakes.a9;
         if (p.traction.notch > 0) p.traction.setNotch(0);
         bus.emit('hud:alert', { kind: 'atp', text: `ATP braking — ${this.atpReason}`, level: 1, cooldown: 8 });
+      } else if (this.atpHold && speed < permit - 1.5) {
+        // like a real ATP, the intervention is released once the train is back under the permitted curve
+        if (p.brakes.a9 <= this.atpHold.a9 + 0.01) p.brakes.a9 = this.atpHold.driverA9;
+        this.atpHold = null;
+        bus.emit('hud:message', { text: 'ATP brake released — you have control.', kind: 'info', cooldown: 6 });
       }
     }
     // ---------------------------------------------------------- curve overspeed (derailment risk)

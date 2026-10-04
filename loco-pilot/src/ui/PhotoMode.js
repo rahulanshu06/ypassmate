@@ -26,8 +26,8 @@ export class PhotoMode {
         h('button.btn.small', { onclick: () => this.toggleUi() }, 'Hide UI (H)'),
         h('button.btn.small', { onclick: () => game.closePhotoMode() }, 'Exit')));
     this.onKey = (e) => {
+      // Escape / K are routed through Input -> Game.handleInput so they are handled exactly once.
       if (e.code === 'KeyH') this.toggleUi();
-      if (e.code === 'Escape' || e.code === 'KeyK') game.closePhotoMode();
     };
   }
   apply() {

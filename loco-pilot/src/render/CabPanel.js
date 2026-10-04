@@ -191,7 +191,7 @@ export class WindshieldRain {
     const add = rain * (18 + speed * 0.9) * dt * 6;
     for (let i = 0; i < add; i++) {
       if (this.drops.length > 650) this.drops.shift();
-      this.drops.push({ x: Math.random() * 512, y: Math.random() * 256, r: 1.2 + Math.random() * 3.2 * (0.6 + rain * 0.6), vy: 0 });
+      this.drops.push({ x: Math.random() * 512, y: Math.random() * 256, r: 2.2 + Math.random() * 4.2 * (0.6 + rain * 0.6), vy: 0 });
     }
     for (const d of this.drops) {
       // airflow pushes drops up and outwards at speed; gravity pulls large drops down when slow
@@ -224,9 +224,10 @@ export class WindshieldRain {
     c.clearRect(0, 0, 512, 256);
     for (const d of this.drops) {
       const g = c.createRadialGradient(d.x - d.r * 0.3, d.y - d.r * 0.3, 0, d.x, d.y, d.r);
-      g.addColorStop(0, 'rgba(255,255,255,0.55)');
-      g.addColorStop(0.5, 'rgba(180,190,200,0.22)');
-      g.addColorStop(1, 'rgba(20,25,30,0.45)');
+      g.addColorStop(0, 'rgba(255,255,255,0.75)');
+      g.addColorStop(0.45, 'rgba(200,210,220,0.35)');
+      g.addColorStop(0.8, 'rgba(60,70,80,0.5)');
+      g.addColorStop(1, 'rgba(20,25,30,0.15)');
       c.fillStyle = g;
       c.beginPath();
       c.ellipse(d.x, d.y, d.r, d.r * 1.15, 0, 0, Math.PI * 2);

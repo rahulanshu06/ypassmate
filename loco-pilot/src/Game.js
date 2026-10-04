@@ -444,16 +444,21 @@ export class Game {
     let dt = (now - this.lastFrame) / 1000;
     this.lastFrame = now;
     if (!(dt > 0)) dt = 0.016;
+    this.perf(Math.min(dt, 1)); // real frame time for the FPS meter / dynamic resolution
     dt = Math.min(dt, 0.1);
-    this.perf(dt);
     input.pollGamepad();
     this.handleInput(dt);
     const j = this.journey;
     if (j) {
       const running = this.state === 'driving' || this.state === 'menu' || this.state === 'results';
       if (running) {
-        if (this.autopilot) this.autopilot.update();
-        j.update(dt * this.timeScale);
+        let simDt = dt * this.timeScale;
+        while (simDt > 1e-6) {
+          const h = Math.min(0.1, simDt);
+          if (this.autopilot) this.autopilot.update();
+          j.update(h);
+          simDt -= h;
+        }
       }
     }
     this.updateVisuals(dt);
@@ -469,9 +474,12 @@ export class Game {
       if (this.touch) this.touch.sync(j.player);
     } else {
       for (const a of input.takePresses()) {
-        if (a === 'pause' && this.state === 'paused') this.resume();
-        else if (a === 'pause' && this.state === 'photo') this.closePhotoMode();
-        else if (a === 'pause' && this.ui.current && this.state !== 'menu') this.ui.back();
+        if (this.state === 'photo') {
+          if (a === 'pause' || a === 'photo') this.closePhotoMode();
+        } else if (a === 'pause') {
+          if (this.ui.stack.length) this.ui.back();
+          else if (this.state === 'paused') this.resume();
+        }
       }
     }
   }

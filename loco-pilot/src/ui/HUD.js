@@ -16,7 +16,8 @@ export class HUD {
     this.game = game;
     this.el = h('div.hud');
     this.visible = true;
-    this.monitorOn = true;
+    // small screens start with the track monitor folded away (T / MAP brings it back)
+    this.monitorOn = !matchMedia('(max-width: 960px), (max-height: 560px)').matches;
     this.timer = 0;
     this.alerts = new Map();
     this.msgCooldown = new Map();

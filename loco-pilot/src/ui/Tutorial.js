@@ -51,10 +51,13 @@ export class Tutorial {
     const s = STEPS[this.index];
     if (!s) return;
     const [title, body] = lang() === 'hi' ? s.hi : s.en;
+    // in training the guard is ready shortly after this step appears
+    if (s.id === 'rightaway' && this.j.advanceDeparture) this.j.advanceDeparture(0.3);
     clear(this.el);
-    this.el.append(h('div.step', `TRAINING ${this.index + 1} / ${STEPS.length}`), h('div.title', title), h('div.body', body),
+    // (h() drops null children; native append() would print "null")
+    this.el.append(...[h('div.step', `TRAINING ${this.index + 1} / ${STEPS.length}`), h('div.title', title), h('div.body', body),
       s.manual ? h('div', { style: { marginTop: '8px', pointerEvents: 'auto' } }, h('button.btn.small.primary', { onclick: () => this.next() }, lang() === 'hi' ? 'आगे ↵' : 'Next ↵')) : null,
-      h('div.prog', h('i', { style: { width: `${((this.index + 1) / STEPS.length) * 100}%` } })));
+      h('div.prog', h('i', { style: { width: `${((this.index + 1) / STEPS.length) * 100}%` } }))].filter(Boolean));
     this.el.style.pointerEvents = s.manual ? 'auto' : 'none';
   }
   update() {

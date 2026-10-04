@@ -80,7 +80,7 @@ export class WeatherFX {
       u.uFall.value.set(weather.wind * 3.5, -9.5 - rain * 3, weather.wind * 1.5);
       u.uLen.value = 0.55;
       u.uBox.value = 40;
-      const lum = 0.18 + 0.6 * daylight;
+      const lum = 0.3 + 0.65 * daylight;
       u.uColor.value.setRGB(lum, lum * 1.03, lum * 1.08);
       u.uOpacity.value = Math.min(0.55, 0.12 + rain * 0.45) * (insideCab ? 0.8 : 1);
       this.lines.geometry.setDrawRange(0, Math.floor(this.count * 2 * Math.min(1, 0.25 + rain)));

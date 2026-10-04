@@ -18,7 +18,7 @@ export class UIManager {
     this.stack = [];
     this.applyScale();
     bus.on('settings:changed', ({ key }) => {
-      if (key === 'uiScale' || key === '*') this.applyScale();
+      if (key === 'uiScale' || key === 'language' || key === '*') this.applyScale();
       if ((key === 'language' || key === '*') && this.current && this.current.rerender) this.current.rerender();
     });
     bus.on('toast', ({ text, ms }) => this.toast(text, ms));
@@ -26,6 +26,7 @@ export class UIManager {
 
   applyScale() {
     document.documentElement.style.setProperty('--ui-scale', settings.get('uiScale') || 1);
+    document.documentElement.lang = settings.get('language') === 'hi' ? 'hi' : 'en';
   }
 
   /** Show a screen object { el, onShow?, onHide?, rerender? } replacing the current one. */

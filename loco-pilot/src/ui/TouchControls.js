@@ -13,9 +13,11 @@ export class TouchControls {
       // top = +10 notches, middle = 0, bottom = regen B8
       const n = v > 0.5 ? (v - 0.5) * 2 * 10 : -(0.5 - v) * 2 * 8;
       input.analog.touchThrottle = Math.round(n);
+      input.analog.touchThrottleSeq = (input.analog.touchThrottleSeq || 0) + 1;
     }, 0.5);
     this.brake = this.slider('BRAKE', 'calc(18px + 74px)', (v) => {
       input.analog.touchBrake = 1 - v;
+      input.analog.touchBrakeSeq = (input.analog.touchBrakeSeq || 0) + 1;
     }, 1);
     const btn = (label, action, hold, cls = '') => {
       const b = h('button.tbtn' + cls, label);
@@ -37,9 +39,10 @@ export class TouchControls {
       return b;
     };
     this.buttons = h('div.tbtns',
-      btn('HORN', 'horn', true), btn('LIGHT', 'headlight'), btn('WIPER', 'wiper'),
-      btn('CAMERA', 'camera'), btn('LOCO BRK', 'indRelease', true), btn('EMERG', 'emergency', false, '.em'),
-      btn('REV F', 'reverserFwd'), btn('VCD', 'vcdAck'), btn('PAUSE', 'pause'));
+      btn('HORN', 'horn', true), btn('LIGHT', 'headlight'), btn('WIPER', 'wiper'), btn('CAMERA', 'camera'),
+      btn('SA9 REL', 'indRelease', true), btn('SA9 APP', 'indApply', true), btn('SAND', 'sander', true), btn('EMERG', 'emergency', false, '.em'),
+      btn('PANTO', 'pantograph'), btn('VCB', 'vcb'), btn('REV F', 'reverserFwd'), btn('VCD', 'vcdAck'),
+      btn('MAP', 'monitor'), btn('HUD', 'hud'), btn('HELP', 'help'), btn('PAUSE', 'pause'));
     this.el.append(this.throttle.el, this.brake.el, this.buttons);
   }
 
@@ -48,7 +51,8 @@ export class TouchControls {
     const el = h('div.tslider', { style: { left } }, h('div.lbl', label), knob);
     let value = initial;
     const place = () => {
-      knob.style.top = `${(1 - value) * (210 - 46) + 6}px`;
+      const hgt = el.clientHeight || 210;
+      knob.style.top = `${(1 - value) * (hgt - 46) + 6}px`;
     };
     place();
     const move = (e) => {
@@ -64,7 +68,7 @@ export class TouchControls {
     el.addEventListener('pointermove', (e) => {
       if (e.buttons || e.pointerType === 'touch') move(e);
     });
-    return { el, set: (v) => { value = v; place(); } };
+    return { el, set: (v) => { value = v; place(); }, value: () => value };
   }
 
   static wanted() {
@@ -76,9 +80,12 @@ export class TouchControls {
 
   attach() {
     this.ui.hudLayer.append(this.el);
+    this.ui.root.classList.add('touch-on');
+    requestAnimationFrame(() => { this.throttle.set(this.throttle.value()); this.brake.set(this.brake.value()); });
   }
   detach() {
     this.el.remove();
+    this.ui.root.classList.remove('touch-on');
     input.analog.touchThrottle = null;
     input.analog.touchBrake = null;
   }
@@ -87,5 +94,6 @@ export class TouchControls {
     if (!train) return;
     const n = train.traction.notch;
     this.throttle.set(n >= 0 ? 0.5 + (n / 10) * 0.5 : 0.5 - (-n / 8) * 0.5);
+    this.brake.set(1 - train.brakes.a9);
   }
 }
