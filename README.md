@@ -16,3 +16,11 @@ Yellow ball pe tap karna "galat tap" gina jata hai. Har mode ka best score isi b
 
 Koi build step nahi hai. `index.html` ko kisi bhi browser mein kholo, ya GitHub Pages pe host karo
 (Settings → Pages → branch chuno → root folder).
+
+---
+
+# Autobahn Hauler (truck simulator)
+
+`truck/` folder mein ek 3D truck driving simulator hai jo browser mein chalta hai (Euro Truck Simulator jaisa):
+11 European shehar, motorway, trailer ke saath asli physics, AI traffic, din-raat, baarish, jobs aur upgrades.
+`truck/index.html` kholo. Poori details: [truck/README.md](truck/README.md).

@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f1317">
+<title>Autobahn Hauler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Share+Tech+Mono&display=swap">
+<style>
+/* Layout: full-bleed WebGL canvas; HUD pinned to the corners (status + job top-left, GPS top-right,
+   instruments bottom-right); menus are centred cards styled after German motorway signage. Dark-only by design. */
+:root {
+  --asphalt: #12161b;
+  --asphalt-2: #1a2027;
+  --asphalt-3: #232b34;
+  --line: #303b47;
+  --paper: #f1eee6;
+  --muted: #9aa4ae;
+  --sign: #1f4ea1;
+  --sign-deep: #173a7a;
+  --amber: #ffb02e;
+  --good: #3ddc6a;
+  --bad: #ff5a45;
+  --scrim: rgba(6, 9, 12, 0.72);
+  --f-sign: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", Arial, sans-serif;
+  --f-body: "Barlow", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "Share Tech Mono", "Courier New", ui-monospace, monospace;
+  --r: 10px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--asphalt); color: var(--paper); font-family: var(--f-body); font-size: 15px; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+button { font: inherit; color: inherit; }
+kbd { font-family: var(--f-mono); font-size: 0.85em; background: var(--asphalt-3); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--paper); }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+/* ---------- loading + title ---------- */
+.sign-board { background: var(--sign); border: 4px solid var(--paper); border-radius: 12px; box-shadow: 0 0 0 4px var(--sign), 0 20px 50px rgba(0,0,0,.45); padding: 18px 26px 16px; color: var(--paper); }
+.sign-board .road { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-sign); font-weight: 700; font-size: 18px; letter-spacing: .04em; }
+.shield { background: var(--sign); border: 2px solid var(--paper); border-radius: 6px; padding: 0 8px; }
+.sign-board h1 { font-family: var(--f-sign); font-weight: 700; font-size: clamp(40px, 7vw, 76px); line-height: .92; margin: 8px 0 4px; letter-spacing: .01em; text-wrap: balance; }
+.sign-board .sub { font-family: var(--f-sign); font-size: 20px; font-weight: 500; opacity: .9; display: flex; justify-content: space-between; gap: 24px; }
+#loading { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 30%, #1d2630, var(--asphalt) 70%); padding: 16px; z-index: 30; }
+.load-wrap { width: min(560px, 100%); display: grid; gap: 22px; }
+.load-track { height: 10px; background: #2a2f35; border-radius: 6px; overflow: hidden; position: relative; }
+.load-track::after { content: ""; position: absolute; inset: 4px 0; background: repeating-linear-gradient(90deg, rgba(255,255,255,.35) 0 18px, transparent 18px 36px); }
+#load-bar { height: 100%; width: 0; background: var(--amber); transition: width .25s; }
+#load-msg { font-family: var(--f-mono); color: var(--muted); font-size: 14px; min-height: 1.2em; }
+
+#title { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: flex-start; padding: 20px clamp(16px, 6vw, 80px); padding-block: max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-bottom, 0px)); background: linear-gradient(90deg, rgba(8,11,14,.86), rgba(8,11,14,.35) 55%, transparent 80%); overflow-y: auto; }
+.title-col { width: min(470px, 100%); display: grid; gap: 14px; margin-block: auto; }
+#title .sign-board h1 { font-size: clamp(38px, 5.4vw, 64px); }
+@media (max-height: 560px) { #title .sign-board { padding: 12px 18px; } #title .sign-board h1 { font-size: 36px; } .mbtn { padding: 8px 14px; } .mbtn small { display: none; } .newgame { padding: 10px 14px; gap: 8px; } .title-foot { display: none; } }
+@media (max-height: 560px) and (min-width: 640px) {
+  #title .title-col { width: min(880px, 100%); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 14px 18px; }
+  #title .title-col > .sign-board { grid-column: 1; }
+  #title .title-col > .menu { grid-column: 2; grid-row: 1 / span 2; }
+}
+.menu { display: grid; gap: 10px; }
+.mbtn { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px; text-align: left; background: var(--asphalt-2); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 16px; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
+.mbtn:hover { background: var(--asphalt-3); border-color: #44505d; }
+.mbtn:active { transform: translateY(1px); }
+.mbtn b { font-family: var(--f-sign); font-size: 22px; font-weight: 600; letter-spacing: .02em; }
+.mbtn small { color: var(--muted); grid-column: 1; }
+.mbtn .go { grid-row: 1 / span 2; grid-column: 2; font-family: var(--f-sign); font-size: 26px; color: var(--amber); }
+.mbtn.primary { background: var(--amber); color: #1a1205; border-color: var(--amber); }
+.mbtn.primary small, .mbtn.primary .go { color: #3b2a07; }
+.mbtn.primary:hover { background: #ffbf55; }
+.newgame { background: var(--asphalt-2); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: grid; gap: 12px; }
+.field { display: grid; gap: 6px; }
+.field > span { font-family: var(--f-sign); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+select, input[type="range"] { width: 100%; }
+select { background: var(--asphalt); color: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: inherit; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.sw-btn { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); background: var(--c); cursor: pointer; }
+.sw-btn.on { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(255,176,46,.3); }
+.title-foot { color: var(--muted); font-size: 13px; max-width: 46ch; }
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; font-variant-numeric: tabular-nums; }
+#hud > * { pointer-events: auto; }
+.chip { background: rgba(14,18,22,.84); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; }
+#status { position: absolute; left: 14px; top: calc(12px + env(safe-area-inset-top, 0px)); display: flex; gap: 8px; flex-wrap: wrap; max-width: calc(100vw - 320px); pointer-events: none; }
+#status .chip { padding: 6px 10px; font-family: var(--f-sign); font-size: 17px; font-weight: 600; letter-spacing: .02em; display: flex; align-items: center; gap: 8px; }
+#money { color: var(--good); }
+.xp { width: 70px; height: 5px; background: #2b333c; border-radius: 3px; overflow: hidden; }
+#xpbar { height: 100%; background: var(--amber); width: 0; }
+#job-card { position: absolute; left: 14px; top: calc(54px + env(safe-area-inset-top, 0px)); width: min(330px, 46vw); padding: 10px 12px; display: grid; gap: 3px; pointer-events: none; }
+#job-card .lbl { font-family: var(--f-sign); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+#job-cargo { font-family: var(--f-sign); font-size: 20px; font-weight: 600; }
+#job-route { font-size: 14px; }
+.jrow { display: flex; justify-content: space-between; gap: 10px; font-family: var(--f-mono); font-size: 14px; }
+#job-time.soon { color: var(--amber); }
+#job-time.late { color: var(--bad); }
+#job-pay { color: var(--good); }
+#job-dmg, #dmg { color: var(--amber); font-size: 13px; }
+#dmg { position: absolute; left: 14px; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); font-family: var(--f-mono); pointer-events: none; }
+#gps-wrap { position: absolute; right: 14px; top: calc(12px + env(safe-area-inset-top, 0px)); width: clamp(210px, 22vw, 290px); overflow: hidden; display: grid; }
+#gps { width: 100%; aspect-ratio: 5 / 4; display: block; }
+#gps-instr { display: flex; gap: 10px; align-items: center; padding: 8px 10px; background: var(--sign); color: var(--paper); border-bottom: 2px solid var(--paper); }
+.gi-icon { position: relative; width: 38px; height: 38px; flex: none; }
+.gi-icon svg { width: 100%; height: 100%; }
+.gi-icon b { position: absolute; right: -4px; bottom: -4px; background: var(--paper); color: var(--sign); font-family: var(--f-sign); font-size: 13px; border-radius: 50%; width: 18px; height: 18px; display: grid; place-items: center; }
+.gi-text { min-width: 0; }
+.gi-dist { font-family: var(--f-mono); font-size: 18px; }
+.gi-main { font-family: var(--f-sign); font-weight: 600; font-size: 17px; line-height: 1.1; }
+.gi-sub { font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#gps-eta { font-family: var(--f-mono); font-size: 12px; padding: 5px 10px; color: var(--muted); background: rgba(10,13,16,.9); }
+#limit { position: absolute; right: calc(clamp(210px, 22vw, 290px) + 26px); top: calc(14px + env(safe-area-inset-top, 0px)); width: 54px; height: 54px; border-radius: 50%; background: #fff; border: 7px solid #c4161c; display: grid; place-items: center; color: #111; font-family: var(--f-sign); font-weight: 700; font-size: 22px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+#limit.over { animation: pulse .6s infinite alternate; }
+@keyframes pulse { to { box-shadow: 0 0 0 6px rgba(255,90,69,.55); } }
+#cluster { position: absolute; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: clamp(330px, 32vw, 470px); aspect-ratio: 3 / 1; pointer-events: none; }
+#toasts { position: absolute; left: 50%; top: calc(58px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); display: grid; gap: 6px; justify-items: center; width: min(520px, calc(100vw - 32px)); pointer-events: none; }
+.toast { padding: 8px 14px; border-radius: 8px; background: rgba(14,18,22,.88); border-left: 4px solid var(--muted); font-size: 14px; animation: tin .25s ease-out; max-width: 100%; }
+.toast.good { border-left-color: var(--good); }
+.toast.bad { border-left-color: var(--bad); }
+.toast.warn { border-left-color: var(--amber); }
+.toast.out { opacity: 0; transform: translateY(-6px); transition: .35s; }
+@keyframes tin { from { opacity: 0; transform: translateY(-8px); } }
+#prompt { position: absolute; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 10px 18px; border-radius: 999px; background: rgba(14,18,22,.88); border: 1px solid rgba(255,176,46,.6); font-size: 15px; cursor: pointer; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+#blink { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+#fps { position: absolute; left: 14px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); font-family: var(--f-mono); font-size: 12px; color: var(--muted); pointer-events: none; }
+#hud-buttons { position: absolute; left: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 6px; flex-wrap: wrap; }
+.hb { padding: 6px 10px; font-family: var(--f-sign); font-size: 15px; font-weight: 600; cursor: pointer; }
+.hb:hover { background: rgba(35,43,52,.9); }
+.hb kbd { margin-left: 4px; }
+
+/* ---------- touch controls ---------- */
+#touch { position: absolute; inset: 0; pointer-events: none; }
+#touch > * { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+#tc-wheel { position: absolute; left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: min(38vh, 230px); aspect-ratio: 1; border-radius: 50%; }
+#tc-wheel-rim { width: 100%; height: 100%; border-radius: 50%; border: 14px solid rgba(25,28,32,.82); box-shadow: inset 0 0 0 2px rgba(255,255,255,.12), 0 6px 18px rgba(0,0,0,.4); position: relative; background: radial-gradient(circle, rgba(25,28,32,.55) 0 22%, transparent 23%); }
+#tc-wheel-rim::before { content: ""; position: absolute; left: 50%; top: -14px; width: 10px; height: 18px; margin-left: -5px; background: var(--amber); border-radius: 3px; }
+#tc-wheel-rim::after { content: ""; position: absolute; left: 6%; right: 6%; top: 50%; height: 12px; margin-top: -6px; background: rgba(25,28,32,.82); border-radius: 6px; }
+.pedal { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: min(15vh, 92px); height: min(34vh, 190px); border-radius: 12px; background: rgba(25,28,32,.82); border: 2px solid rgba(255,255,255,.12); display: grid; place-items: end center; padding-bottom: 12px; font-family: var(--f-sign); font-weight: 700; letter-spacing: .08em; color: var(--muted); background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 6px, transparent 6px 14px); }
+.pedal.on { border-color: var(--amber); color: var(--paper); transform: scale(.97); }
+#tc-gas { right: calc(16px + env(safe-area-inset-right, 0px)); }
+#tc-brake { right: calc(min(15vh, 92px) + 30px + env(safe-area-inset-right, 0px)); height: min(26vh, 150px); }
+#tc-btns { position: absolute; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(min(34vh, 190px) + 26px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(4, 46px); gap: 6px; }
+.tb { height: 40px; border-radius: 8px; background: rgba(25,28,32,.82); border: 1px solid rgba(255,255,255,.14); font-family: var(--f-sign); font-weight: 600; font-size: 13px; letter-spacing: .04em; padding: 0; }
+.tb:active { background: rgba(255,176,46,.35); }
+@media (pointer: coarse) {
+  /* phones/tablets in landscape: wheel bottom-left, pedals bottom-right, button strip top-centre */
+  #cluster { left: 50%; right: auto; transform: translateX(-50%); width: min(330px, 40vw); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  #prompt { bottom: calc(min(330px, 40vw) / 3 + 22px + env(safe-area-inset-bottom, 0px)); }
+  #hud-buttons, #wx-chip, #job-card .lbl, #job-dmg, #dmg, #fps { display: none !important; }
+  #status { flex-direction: column; align-items: flex-start; gap: 4px; max-width: none; left: calc(10px + env(safe-area-inset-left, 0px)); top: calc(8px + env(safe-area-inset-top, 0px)); }
+  #status .chip { font-size: 14px; padding: 3px 8px; }
+  #job-card { top: calc(104px + env(safe-area-inset-top, 0px)); left: calc(10px + env(safe-area-inset-left, 0px)); width: min(200px, 26vw); padding: 6px 8px; }
+  #job-cargo { font-size: 15px; }
+  #job-route { font-size: 12px; }
+  .jrow { font-size: 12px; flex-direction: column; gap: 0; }
+  #gps-wrap { width: min(180px, 24vw); top: calc(8px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); }
+  #gps-instr { padding: 5px 7px; gap: 6px; }
+  .gi-icon { width: 28px; height: 28px; }
+  .gi-dist { font-size: 14px; }
+  .gi-main { font-size: 13px; }
+  .gi-sub { display: none; }
+  #limit { right: calc(min(180px, 24vw) + 18px); top: calc(92px + env(safe-area-inset-top, 0px)); width: 42px; height: 42px; font-size: 17px; border-width: 5px; }
+  #tc-btns { left: 50%; right: auto; transform: translateX(-50%); top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; grid-template-columns: repeat(8, minmax(0, 46px)); gap: 5px; }
+  .tb { height: 36px; font-size: 12px; }
+  #toasts { top: calc(96px + env(safe-area-inset-top, 0px)); width: min(400px, 40vw); }
+  .toast { font-size: 13px; padding: 6px 10px; }
+}
+#rotate-hint { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; text-align: center; padding: 24px; background: var(--asphalt); font-family: var(--f-sign); font-size: 24px; }
+#rotate-hint b { display: block; font-size: 64px; color: var(--amber); }
+@media (pointer: coarse) and (orientation: portrait) { #rotate-hint { display: grid; } }
+@media (max-height: 520px) {
+  #job-card { top: calc(48px + env(safe-area-inset-top, 0px)); font-size: 13px; padding: 7px 10px; }
+  #gps-wrap { width: 200px; }
+  #limit { right: 226px; width: 46px; height: 46px; font-size: 19px; border-width: 6px; }
+}
+
+/* ---------- panels ---------- */
+.panel { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; background: var(--scrim); padding: 16px; padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px)); }
+.card { width: min(760px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto 1fr auto; background: var(--asphalt); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+.card.narrow { width: min(460px, 100%); }
+.card > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; background: var(--sign); border-bottom: 3px solid var(--paper); }
+.card > header h2 { margin: 0; font-family: var(--f-sign); font-weight: 700; font-size: 26px; letter-spacing: .02em; }
+.card > header .x { background: transparent; border: 2px solid rgba(255,255,255,.6); border-radius: 8px; width: 36px; height: 36px; cursor: pointer; font-size: 18px; line-height: 1; }
+.card .body { overflow: auto; padding: 16px 18px; display: grid; gap: 12px; align-content: start; min-height: 0; }
+.card > footer { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; align-items: center; }
+.btn { background: var(--asphalt-3); border: 1px solid #44505d; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-family: var(--f-sign); font-weight: 600; font-size: 16px; letter-spacing: .02em; white-space: nowrap; }
+.btn:hover:not(:disabled) { background: #2d3743; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--amber); color: #1a1205; border-color: var(--amber); }
+.btn.danger { background: transparent; border-color: var(--bad); color: var(--bad); }
+.muted { color: var(--muted); }
+
+/* jobs */
+#jobs-list { display: grid; gap: 8px; }
+.job { display: grid; grid-template-columns: 150px 1fr auto; align-items: stretch; text-align: left; padding: 0; background: var(--asphalt-2); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; cursor: pointer; }
+.job:hover:not(:disabled) { border-color: var(--amber); }
+.job:disabled { cursor: default; }
+.job.locked { opacity: .55; }
+.job .sign { background: var(--sign); display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-content: center; gap: 0 8px; padding: 10px 12px; border-right: 3px solid var(--paper); }
+.job .arrow { grid-row: 1 / span 2; font-size: 24px; align-self: center; }
+.job .dest { font-family: var(--f-sign); font-weight: 700; font-size: 21px; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job .km { font-family: var(--f-sign); font-size: 16px; opacity: .9; }
+.job .jb { padding: 10px 12px; display: grid; gap: 3px; min-width: 0; }
+.job .jt { font-family: var(--f-sign); font-weight: 600; font-size: 19px; }
+.job .jt small { color: var(--muted); font-weight: 500; }
+.job .jm { color: var(--muted); font-size: 13px; }
+.jtags { display: flex; gap: 5px; flex-wrap: wrap; }
+.tag { font-family: var(--f-sign); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; background: var(--asphalt-3); color: var(--paper); }
+.tag.adr { background: #f07a00; color: #111; }
+.tag.urgent { background: var(--bad); color: #fff; }
+.tag.lock { background: transparent; border: 1px solid var(--muted); color: var(--muted); }
+.job .jpay { padding: 10px 14px; display: grid; align-content: center; justify-items: end; gap: 2px; }
+.job .jpay b { font-family: var(--f-mono); font-size: 18px; color: var(--good); font-weight: 400; }
+.job .jpay small { color: var(--muted); font-size: 12px; }
+#jobs-current { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px dashed var(--amber); border-radius: var(--r); flex-wrap: wrap; }
+@media (max-width: 620px) {
+  .job { grid-template-columns: 1fr auto; }
+  .job .sign { grid-column: 1 / -1; border-right: 0; border-bottom: 3px solid var(--paper); }
+}
+
+/* garage */
+.g-sec h3 { margin: 4px 0 6px; font-family: var(--f-sign); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.g-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--asphalt-2); margin-bottom: 5px; flex-wrap: wrap; }
+.g-row.active { outline: 1px solid var(--good); }
+.g-row em { font-style: normal; color: var(--good); font-family: var(--f-sign); font-weight: 600; }
+.sw { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: -2px; border: 1px solid rgba(255,255,255,.3); }
+
+/* map */
+#p-map .card { width: min(1100px, 100%); height: calc(100vh - 32px); height: calc(100dvh - 32px); }
+#p-map .body { padding: 0; position: relative; }
+#map-canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.map-legend { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; padding: 6px 10px; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+#map-sel { margin-right: auto; color: var(--muted); }
+
+/* result + settings + help */
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.row b { font-family: var(--f-mono); font-weight: 400; text-align: right; }
+.total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 6px; }
+.total b { font-family: var(--f-mono); font-size: 34px; color: var(--good); font-weight: 400; }
+#res-xp { color: var(--amber); font-family: var(--f-sign); font-size: 18px; }
+.set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; }
+.check { display: flex; gap: 8px; align-items: center; }
+.keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 4px 20px; }
+.keys div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.help-h { margin: 6px 0 2px; font-family: var(--f-sign); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.tips { margin: 0; padding-left: 18px; color: var(--paper); font-size: 14px; display: grid; gap: 4px; max-width: 70ch; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<canvas id="scene" tabindex="0" aria-label="Driving view"></canvas>
+<div id="rotate-hint"><div><b>⟳</b>Turn your phone sideways to drive</div></div>
+
+<div id="loading">
+  <div class="load-wrap">
+    <div class="sign-board">
+      <div class="road"><span class="shield">A 9</span><span>Ausfahrt · Exit</span></div>
+      <h1>Autobahn Hauler</h1>
+      <div class="sub"><span>Hamburg · Berlin · Praha · Wien</span><span>11 cities</span></div>
+    </div>
+    <div class="load-track"><div id="load-bar"></div></div>
+    <div id="load-msg">Loading</div>
+  </div>
+</div>
+
+<div id="title" hidden>
+  <div class="title-col">
+    <div class="sign-board">
+      <div class="road"><span class="shield">A 9</span><span>European freight</span></div>
+      <h1>Autobahn Hauler</h1>
+      <div class="sub"><span>Truck driving simulator</span><span>v1.0</span></div>
+    </div>
+    <div class="menu">
+      <button class="mbtn primary" id="t-continue" hidden><b>Continue career</b><small id="t-continue-sub"></small><span class="go" aria-hidden="true">➜</span></button>
+      <div class="newgame">
+        <label class="field"><span>Home city</span><select id="t-city"></select></label>
+        <div class="field"><span>Cab colour</span><div class="swatches" id="t-paint"></div></div>
+        <button class="mbtn" id="t-new"><b>New career</b><small>Start with €6,000, a 420 hp tractor and an empty logbook</small><span class="go" aria-hidden="true">➜</span></button>
+      </div>
+      <button class="mbtn" id="t-settings"><b>Settings</b><small>Graphics, gearbox, steering, weather</small><span class="go" aria-hidden="true">➜</span></button>
+      <button class="mbtn" id="t-help"><b>Controls</b><small>Keyboard, gamepad and touch</small><span class="go" aria-hidden="true">➜</span></button>
+    </div>
+    <p class="title-foot">Best with a keyboard or gamepad. On phones and tablets, turn the device sideways for the on-screen wheel and pedals.</p>
+  </div>
+</div>
+
+<div id="hud" hidden>
+  <div id="status">
+    <div class="chip" id="money">€0</div>
+    <div class="chip"><span id="lvl">Level 1</span><span class="xp"><span id="xpbar"></span></span></div>
+    <div class="chip"><span id="clock">Day 1 · 08:00</span></div>
+    <div class="chip" id="wx-chip"><span id="wx">Clear</span></div>
+  </div>
+  <div id="job-card" class="chip" hidden>
+    <span class="lbl">Current delivery</span>
+    <span id="job-cargo"></span>
+    <span id="job-route"></span>
+    <div class="jrow"><span id="job-time"></span><span id="job-pay"></span></div>
+    <span id="job-dmg"></span>
+  </div>
+  <div id="gps-wrap" class="chip">
+    <div id="gps-instr" hidden></div>
+    <canvas id="gps" aria-label="Navigation map"></canvas>
+    <div id="gps-eta"></div>
+  </div>
+  <div id="limit" hidden aria-label="Speed limit"><span>80</span></div>
+  <div id="hud-buttons">
+    <button class="hb chip" id="hb-jobs">Jobs<kbd>J</kbd></button>
+    <button class="hb chip" id="hb-map">Map<kbd>M</kbd></button>
+    <button class="hb chip" id="hb-cam">Camera<kbd>V</kbd></button>
+    <button class="hb chip" id="hb-menu">Menu<kbd>Esc</kbd></button>
+  </div>
+  <canvas id="cluster" aria-label="Instrument cluster"></canvas>
+  <div id="dmg"></div>
+  <div id="fps" hidden></div>
+  <div id="toasts" aria-live="polite"></div>
+  <button id="prompt" hidden></button>
+  <div id="flash"></div>
+  <div id="blink"></div>
+  <div id="touch" hidden>
+    <div id="tc-wheel" aria-label="Steering wheel"><div id="tc-wheel-rim"></div></div>
+    <div id="tc-btns">
+      <button class="tb" data-act="engine">ENG</button>
+      <button class="tb" data-act="park">PARK</button>
+      <button class="tb" data-act="lights">LIGHT</button>
+      <button class="tb" data-act="horn">HORN</button>
+      <button class="tb" data-act="indL">◀ IND</button>
+      <button class="tb" data-act="indR">IND ▶</button>
+      <button class="tb" data-act="trailer">TRAIL</button>
+      <button class="tb" data-act="interact">OK</button>
+      <button class="tb" data-act="gearDown">GEAR−</button>
+      <button class="tb" data-act="gearUp">GEAR+</button>
+      <button class="tb" data-act="cruise">CRUISE</button>
+      <button class="tb" data-act="retarder">RET</button>
+      <button class="tb" data-act="jobs">JOBS</button>
+      <button class="tb" data-act="map">MAP</button>
+      <button class="tb" data-act="camera">CAM</button>
+      <button class="tb" data-act="pause">MENU</button>
+    </div>
+    <div class="pedal" id="tc-brake">BRAKE</div>
+    <div class="pedal" id="tc-gas">GAS</div>
+  </div>
+</div>
+
+<div class="panel" id="p-jobs" hidden>
+  <div class="card">
+    <header><h2>Freight market</h2><button class="x" data-close aria-label="Close">✕</button></header>
+    <div class="body">
+      <div id="jobs-current" hidden><span id="jobs-current-text"></span><button class="btn danger" id="jobs-cancel">Cancel job</button></div>
+      <p class="muted" style="margin:0">Offers closest to you come first. Pay depends on distance, weight and cargo. Higher levels unlock fragile, ADR and heavy loads.</p>
+      <div id="jobs-list"></div>
+    </div>
+    <footer><button class="btn" data-close>Close</button></footer>
+  </div>
+</div>
+
+<div class="panel" id="p-garage" hidden>
+  <div class="card">
+    <header><h2>Service &amp; upgrades</h2><button class="x" data-close aria-label="Close">✕</button></header>
+    <div class="body" id="garage-body"></div>
+    <footer><span class="muted" style="margin-right:auto">Balance <b id="garage-money"></b></span><button class="btn" data-close>Done</button></footer>
+  </div>
+</div>
+
+<div class="panel" id="p-map" hidden>
+  <div class="card">
+    <header><h2>Map</h2><button class="x" data-close aria-label="Close">✕</button></header>
+    <div class="body">
+      <canvas id="map-canvas" aria-label="World map"></canvas>
+      <div class="map-legend chip"><span><i class="dot" style="background:#f2c94c"></i>Motorway</span><span><i class="dot" style="background:#f4f1ea"></i>Road</span><span><i class="dot" style="background:#3d8bff"></i>Fuel &amp; service</span><span><i class="dot" style="background:#ff7a1a"></i>GPS route</span></div>
+    </div>
+    <footer><span id="map-sel">Tap a depot or fuel station</span><button class="btn" id="map-zout">−</button><button class="btn" id="map-zin">+</button><button class="btn" id="map-center">My truck</button><button class="btn" id="map-fuel">Nearest fuel</button><button class="btn primary" id="map-route" disabled>Set GPS route</button></footer>
+  </div>
+</div>
+
+<div class="panel" id="p-pause" hidden>
+  <div class="card narrow">
+    <header><h2>Paused</h2><button class="x" data-close aria-label="Close">✕</button></header>
+    <div class="body">
+      <div class="menu">
+        <button class="mbtn primary" id="pm-resume"><b>Resume</b><span class="go" aria-hidden="true">➜</span></button>
+        <button class="mbtn" id="pm-jobs"><b>Freight market</b><small>Take or cancel a job</small></button>
+        <button class="mbtn" id="pm-map"><b>Map</b><small>Plan a route</small></button>
+        <button class="mbtn" id="pm-settings"><b>Settings</b></button>
+        <button class="mbtn" id="pm-help"><b>Controls</b></button>
+        <button class="mbtn" id="pm-rescue"><b>Roadside assistance</b><small>Stuck or out of fuel? Get towed to a service station</small></button>
+        <button class="mbtn" id="pm-title"><b>Save &amp; exit to title</b></button>
+      </div>
+    </div>
+    <footer><span class="muted">Your career saves automatically.</span></footer>
+  </div>
+</div>
+
+<div class="panel" id="p-result" hidden>
+  <div class="card narrow">
+    <header><h2>Delivered</h2></header>
+    <div class="body">
+      <div id="res-rows"></div>
+      <div class="total"><span>Paid</span><b id="res-total"></b></div>
+      <div id="res-xp"></div>
+    </div>
+    <footer><button class="btn primary" id="res-ok">Back on the road</button></footer>
+  </div>
+</div>
+
+<div class="panel" id="p-confirm" hidden>
+  <div class="card narrow">
+    <header><h2 id="cf-title"></h2></header>
+    <div class="body"><p id="cf-text" style="margin:0"></p></div>
+    <footer><button class="btn" id="cf-cancel" data-close>Back</button><button class="btn primary" id="cf-ok">OK</button></footer>
+  </div>
+</div>
+
+<div class="panel" id="p-settings" hidden>
+  <div class="card">
+    <header><h2>Settings</h2><button class="x" data-close aria-label="Close">✕</button></header>
+    <div class="body">
+      <div class="set-grid">
+        <label class="field"><span>Graphics quality</span><select id="set-quality"><option value="low">Low (phones)</option><option value="medium">Medium</option><option value="high">High</option><option value="ultra">Ultra</option></select></label>
+        <label class="field"><span>Gearbox</span><select id="set-gearbox"><option value="auto">Automatic (S brakes, then reverses)</option><option value="manual">Manual sequential (R / F)</option></select></label>
+        <label class="field"><span>Steering</span><select id="set-steering"><option value="keys">Keyboard / gamepad</option><option value="mouse">Mouse position</option><option value="touch">On-screen wheel</option><option value="tilt">Tilt the device</option></select></label>
+        <label class="field"><span>Weather</span><select id="set-weather"><option value="dynamic">Changes over time</option><option value="clear">Always clear</option><option value="cloudy">Always cloudy</option><option value="rain">Always rain</option><option value="fog">Always fog</option></select></label>
+        <label class="field"><span>Time speed</span><select id="set-timeScale"><option value="1">Real time (1×)</option><option value="10">10×</option><option value="15">15× (default)</option><option value="30">30×</option><option value="60">60×</option></select></label>
+        <label class="field"><span>Traffic density</span><select id="set-traffic"><option value="0.5">Light</option><option value="1">Normal</option><option value="1.5">Heavy</option></select></label>
+        <label class="field"><span>Speed limiter</span><select id="set-limiter"><option value="80">80 km/h</option><option value="90">90 km/h (EU)</option><option value="100">100 km/h</option><option value="120">120 km/h (off-road rules)</option></select></label>
+        <label class="field"><span>Cabin field of view</span><select id="set-fov"><option value="55">55°</option><option value="62">62°</option><option value="68">68°</option><option value="75">75°</option><option value="85">85°</option></select></label>
+        <label class="field"><span>Volume</span><input type="range" id="set-volume" min="0" max="1" step="0.05"></label>
+      </div>
+      <div class="set-grid">
+        <label class="check"><input type="checkbox" id="set-mirrors"> Live mirrors</label>
+        <label class="check"><input type="checkbox" id="set-insets"> Mirror views on screen (cabin)</label>
+        <label class="check"><input type="checkbox" id="set-cluster"> Show instruments in cabin view</label>
+        <label class="check"><input type="checkbox" id="set-fps"> Show FPS</label>
+      </div>
+      <p class="muted" style="margin:0">Graphics quality and traffic density apply after a reload.</p>
+    </div>
+    <footer><button class="btn" data-close>Cancel</button><button class="btn primary" id="settings-save">Save</button></footer>
+  </div>
+</div>
+
+<div class="panel" id="p-help" hidden>
+  <div class="card">
+    <header><h2>Controls</h2><button class="x" data-close aria-label="Close">✕</button></header>
+    <div class="body">
+      <div class="help-h">Driving</div>
+      <div class="keys">
+        <div><span>Accelerate / brake</span><span><kbd>W</kbd> <kbd>S</kbd> or arrows</span></div>
+        <div><span>Steer</span><span><kbd>A</kbd> <kbd>D</kbd> or arrows</span></div>
+        <div><span>Engine on / off</span><kbd>E</kbd></div>
+        <div><span>Parking brake</span><kbd>Space</kbd></div>
+        <div><span>Gear up / down (manual)</span><span><kbd>R</kbd> <kbd>F</kbd></span></div>
+        <div><span>Retarder / engine brake</span><kbd>B</kbd></div>
+        <div><span>Cruise control, ± 5 km/h</span><span><kbd>C</kbd> <kbd>+</kbd> <kbd>−</kbd></span></div>
+        <div><span>Couple / detach trailer</span><kbd>T</kbd></div>
+        <div><span>Deliver, refuel, service</span><kbd>Enter</kbd></div>
+      </div>
+      <div class="help-h">Lights &amp; signals</div>
+      <div class="keys">
+        <div><span>Headlights / high beam</span><span><kbd>L</kbd> <kbd>K</kbd></span></div>
+        <div><span>Indicators left / right</span><span><kbd>,</kbd> <kbd>.</kbd></span></div>
+        <div><span>Hazard lights</span><kbd>/</kbd></div>
+        <div><span>Horn</span><kbd>H</kbd></div>
+        <div><span>Wipers</span><kbd>P</kbd></div>
+        <div><span>Beacons (if fitted)</span><kbd>G</kbd></div>
+      </div>
+      <div class="help-h">View &amp; menus</div>
+      <div class="keys">
+        <div><span>Camera</span><span><kbd>V</kbd> or <kbd>1</kbd>–<kbd>4</kbd></span></div>
+        <div><span>Look around</span><span>drag, or <kbd>Z</kbd> <kbd>X</kbd></span></div>
+        <div><span>Mirror views on screen</span><kbd>O</kbd></div>
+        <div><span>Jobs / map</span><span><kbd>J</kbd> <kbd>M</kbd></span></div>
+        <div><span>GPS zoom</span><kbd>N</kbd></div>
+        <div><span>Roadside assistance</span><kbd>Backspace</kbd></div>
+        <div><span>Pause</span><kbd>Esc</kbd></div>
+      </div>
+      <div class="help-h">Gamepad</div>
+      <p class="muted" style="margin:0">Left stick steers, RT / LT are throttle and brake, A = Enter, B = parking brake, X = engine, Y = camera, LB / RB = gears, D-pad = lights, horn and indicators, right stick looks around. Steering wheels that report as a standard gamepad work the same way.</p>
+      <div class="help-h">First job</div>
+      <ol class="tips">
+        <li>Press <kbd>E</kbd> and wait for the air pressure to pass 5.2 bar, then release the parking brake with <kbd>Space</kbd>.</li>
+        <li>Open the freight market with <kbd>J</kbd>. The GPS leads you to the trailer (green beam).</li>
+        <li>Reverse slowly under the trailer until the prompt says it is lined up, then press <kbd>T</kbd>.</li>
+        <li>Drive to the destination and stop in the yard. Reverse into the orange bay for a bonus, then press <kbd>Enter</kbd>.</li>
+        <li>Keep to the limits: speed cameras fine you, and so does crashing into other drivers.</li>
+      </ol>
+    </div>
+    <footer><button class="btn" data-close>Close</button></footer>
+  </div>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/world.js"></script>
+<script src="js/env.js"></script>
+<script src="js/vehicle.js"></script>
+<script src="js/traffic.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/input.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
