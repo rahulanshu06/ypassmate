@@ -10,6 +10,7 @@
   };
   const SAVE_KEY = 'autobahn-hauler-save-v1', SET_KEY = 'autobahn-hauler-settings-v1';
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
+  const isTablet = isTouch && Math.min(screen.width, screen.height) >= 700;
   const QUALITY = {
     low: { pr: 0.85, aa: false, shadows: false, shadowSize: 1024, shadowBox: 50, drawDist: 900, trees: 0.22, traffic: 22, rainDrops: 1200, treeDetail: 0 },
     medium: { pr: 1.0, aa: true, shadows: true, shadowSize: 1024, shadowBox: 55, drawDist: 1400, trees: 0.6, traffic: 34, rainDrops: 1800 },
@@ -17,8 +18,9 @@
     ultra: { pr: 2, aa: true, shadows: true, shadowSize: 4096, shadowBox: 85, drawDist: 2600, trees: 1.15, traffic: 62, rainDrops: 3200, treeShadows: true },
   };
   const defaults = {
-    quality: isTouch ? 'low' : 'high', gearbox: 'auto', steering: isTouch ? 'touch' : 'keys', weather: 'dynamic', timeScale: 15,
-    volume: 0.8, mirrors: !isTouch, mirrorInsets: true, fov: 68, fps: false, traffic: 1, limiter: 90,
+    quality: isTablet ? 'medium' : isTouch ? 'low' : 'high', gearbox: 'auto', steering: isTouch ? 'touch' : 'keys', weather: 'dynamic', timeScale: 15,
+    volume: 0.8, mirrors: !isTouch || isTablet, mirrorInsets: true, fov: 68, fps: false, traffic: 1, limiter: 90,
+    touchSize: 'auto', touchSteer: 'normal', pedals: 'analog',
   };
   const settings = Object.assign({}, defaults, store.get(SET_KEY, {}));
   const Q = Object.assign({}, QUALITY[settings.quality] || QUALITY.high);
@@ -243,6 +245,7 @@
     $('hud').hidden = false;
     $('touch').hidden = !(isTouch || settings.steering === 'touch' || settings.steering === 'tilt');
     if (settings.steering === 'tilt') G.Input.enableTilt().then((ok) => { if (!ok) G.HUD.toast('Tilt steering is not available here. Using the on-screen wheel.', 'warn'); });
+    keepAwake();
     generateMarket(true);
     T.pose(0.016, world);
     updateRoute(true);
@@ -506,6 +509,11 @@
     const names = { cabin: 'Cabin', chase: 'Chase', top: 'Top-down', cinema: 'Roadside' };
     G.HUD.toast('Camera: ' + names[v], 'info', 1200);
   }
+  // keep at least `hMin` degrees horizontally, so tablets held upright still see the road
+  function minFov(vfov, hMin) {
+    const need = (2 * Math.atan(Math.tan((hMin * Math.PI) / 360) / camera.aspect) * 180) / Math.PI;
+    return Math.min(95, Math.max(vfov, need));
+  }
   function updateCamera(dt) {
     const T = truck, I = G.Input;
     camS.yaw -= I.lookDX * 0.004; camS.pitch -= I.lookDY * 0.004;
@@ -517,9 +525,11 @@
       if (Math.abs(T.v) > 3 && !I.lookDX) camS.yaw = U.damp(camS.yaw, T.steer * 0.35, 0.6, dt);
       T.model.P.eye.getWorldPosition(camera.position);
       T.model.cab.getWorldQuaternion(qTmp);
-      eTmp.set(camS.pitch - 0.1, Math.PI + camS.yaw, 0, 'YXZ');
+      // when the screen is upright the wider vertical view is shifted up so the road, not the dashboard, fills it
+      const extra = Math.max(0, minFov(settings.fov, 76) - settings.fov) * (Math.PI / 180);
+      eTmp.set(camS.pitch - 0.1 + extra * 0.32, Math.PI + camS.yaw, 0, 'YXZ');
       camera.quaternion.copy(qTmp).multiply(new THREE.Quaternion().setFromEuler(eTmp));
-      camera.fov = settings.fov; camera.near = 0.05;
+      camera.fov = minFov(settings.fov, 76); camera.near = 0.05;
     } else if (game.view === 'chase' || game.view === 'top') {
       camS.chaseYaw += U.wrapAngle(T.h - camS.chaseYaw) * Math.min(1, dt * 2.2);
       const top = game.view === 'top';
@@ -534,7 +544,7 @@
       const gh = world.surface(camera.position.x, camera.position.z).h;
       if (camera.position.y < gh + 1.2) camera.position.y = gh + 1.2;
       camera.lookAt(tx, ty + (top ? 0 : 0.6), tz);
-      camera.fov = 55; camera.near = 0.3;
+      camera.fov = minFov(55, 62); camera.near = 0.3;
     } else {
       // roadside cinematic camera
       camS.cineT -= dt;
@@ -600,6 +610,7 @@
     else if (T.trailer) T.trailer.damage = Math.min(1, T.trailer.damage + dmg * 0.4);
     if (now - lastCrash > 0.6) {
       G.Audio.fx.crash(U.clamp(speed / 10, 0.2, 1));
+      try { if (navigator.vibrate) navigator.vibrate(Math.min(300, 40 + speed * 25)); } catch (e) { /* no vibration */ }
       shake = Math.min(1, speed / 12);
       if (hit.kind === 'car') {
         traffic.hitCar(hit.car);
@@ -986,6 +997,7 @@
       const c = context();
       G.HUD.prompt(c ? c.text : '', c ? c.act : '');
       setText('dmg', T.damage > 0.01 ? 'Truck damage ' + Math.round(T.damage * 100) + '%' : '');
+      if (!$('touch').hidden) updateTouchButtons();
       if (settings.fps) setText('fps', Math.round(fpsN / Math.max(0.001, fpsAcc)) + ' fps');
     }
     if (gpsT > 1 / 10) {
@@ -1223,7 +1235,7 @@
 
   // settings
   function fillSettings() {
-    for (const k of ['quality', 'gearbox', 'steering', 'weather', 'timeScale', 'traffic', 'fov', 'limiter']) { const el = $('set-' + k); if (el) el.value = String(settings[k]); }
+    for (const k of ['quality', 'gearbox', 'steering', 'weather', 'timeScale', 'traffic', 'fov', 'limiter', 'touchSize', 'touchSteer', 'pedals']) { const el = $('set-' + k); if (el) el.value = String(settings[k]); }
     $('set-volume').value = settings.volume;
     $('set-mirrors').checked = settings.mirrors;
     $('set-insets').checked = settings.mirrorInsets;
@@ -1245,11 +1257,18 @@
     settings.mirrorInsets = $('set-insets').checked;
     settings.fps = $('set-fps').checked;
     settings.clusterAlways = $('set-cluster').checked;
+    settings.touchSize = $('set-touchSize').value;
+    settings.touchSteer = $('set-touchSteer').value;
+    settings.pedals = $('set-pedals').value;
     store.set(SET_KEY, settings);
     applySettingsLive();
     return before.quality !== settings.quality || before.traffic !== settings.traffic;
   }
   function applySettingsLive() {
+    if (settings.touchSize && settings.touchSize !== 'auto') document.documentElement.dataset.tc = settings.touchSize;
+    else delete document.documentElement.dataset.tc;
+    G.Input.analogPedals = settings.pedals !== 'full';
+    G.Input.touchSteerRange = { quick: 1.4, normal: 2.0, smooth: 2.8 }[settings.touchSteer] || 2.0;
     if (!env) return;
     env.timeScale = settings.timeScale;
     if (settings.weather === 'dynamic') env.lockWeather = null; else env.lockWeather = settings.weather;
@@ -1314,6 +1333,41 @@
   $('t-help').addEventListener('click', () => { $('title').hidden = true; openPanel('p-help'); });
   document.querySelectorAll('#p-settings [data-close], #p-help [data-close], #p-confirm [data-close]').forEach((b) => b.addEventListener('click', () => { if (game.state === 'title') $('title').hidden = false; }));
   $('cf-cancel').addEventListener('click', () => { if (game.state === 'title') $('title').hidden = false; });
+
+  // full screen (phones/tablets) and keeping the screen awake while driving
+  function toggleFullscreen() {
+    const d = document, el = d.documentElement;
+    try {
+      if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+      else {
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (!req) throw new Error('unsupported');
+        const r = req.call(el, { navigationUI: 'hide' });
+        if (r && r.catch) r.catch(() => G.HUD.toast('Full screen is not available in this browser.', 'warn'));
+        if (screen.orientation && screen.orientation.lock && !isTablet && isTouch) screen.orientation.lock('landscape').catch(() => {});
+      }
+    } catch (e) { G.HUD.toast('Full screen is not available in this browser.', 'warn'); }
+  }
+  $('pm-full').addEventListener('click', toggleFullscreen);
+  $('t-full').addEventListener('click', toggleFullscreen);
+  let wakeLock = null;
+  async function keepAwake() {
+    try { if (navigator.wakeLock && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) { wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && game.state === 'drive') keepAwake(); });
+  // stop iOS Safari from pinch-zooming the page while both hands are on the controls
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  // touch buttons light up when their function is on
+  const tbState = [];
+  document.querySelectorAll('#tc-btns [data-act]').forEach((b) => tbState.push([b, b.dataset.act]));
+  function updateTouchButtons() {
+    const T = truck;
+    for (const [b, act] of tbState) {
+      const on = act === 'engine' ? T.engineOn : act === 'park' ? T.park : act === 'lights' ? T.lights > 0 : act === 'indL' ? T.indL || T.hazard : act === 'indR' ? T.indR || T.hazard
+        : act === 'cruise' ? T.cruise > 0 : act === 'retarder' ? T.retarder > 0 : act === 'trailer' ? !!T.trailer : false;
+      if (b._on !== on) { b._on = on; b.classList.toggle('active', on); }
+    }
+  }
 
   // pause audio when tab hidden
   document.addEventListener('visibilitychange', () => { if (document.hidden) { G.Audio.suspend(); if (game.state === 'drive') saveCareer(); } else G.Audio.resume(); });

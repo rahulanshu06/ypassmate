@@ -7,7 +7,7 @@ G.Input = (() => {
   const I = {
     steer: 0, fwd: 0, back: 0, steerAnalog: false, handbrake: false, horn: false,
     lookDX: 0, lookDY: 0, zoom: 0, mode: 'keys', touch: { steer: 0, fwd: 0, back: 0, active: false }, mouseX: 0.5, gamepad: null,
-    tilt: { enabled: false, value: 0 },
+    tilt: { enabled: false, value: 0 }, analogPedals: true, touchSteerRange: 2.0,
   };
   const ACT = {
     KeyE: 'engine', Space: 'park', KeyT: 'trailer', KeyL: 'lights', KeyK: 'high', KeyP: 'wipers', KeyB: 'retarder',
@@ -58,7 +58,8 @@ G.Input = (() => {
     wheel.addEventListener('pointerdown', (e) => { wid = e.pointerId; a0 = ang(e); rot0 = rot; wheel.setPointerCapture(e.pointerId); I.touch.active = true; e.preventDefault(); });
     wheel.addEventListener('pointermove', (e) => {
       if (e.pointerId !== wid) return;
-      rot = U.clamp(rot0 + U.wrapAngle(ang(e) - a0), -2.4, 2.4);
+      const lim = I.touchSteerRange * 1.15;
+      rot = U.clamp(rot0 + U.wrapAngle(ang(e) - a0), -lim, lim);
       // unwrap large drags
       if (Math.abs(U.wrapAngle(ang(e) - a0)) > 2.6) { a0 = ang(e); rot0 = rot; }
     });
@@ -67,15 +68,25 @@ G.Input = (() => {
     I._touchTick = (dt) => {
       if (wid === null) rot = U.damp(rot, 0, 6, dt);
       knob.style.transform = `rotate(${rot}rad)`;
-      I.touch.steer = U.clamp(-rot / 2.0, -1, 1);
+      I.touch.steer = U.clamp(-rot / I.touchSteerRange, -1, 1);
     };
+    // analog pedals: the higher the finger on the pedal, the harder it presses (top 30% = full)
     const pedal = (id, key) => {
       const el = root.querySelector(id);
-      const set = (v) => { I.touch[key] = v; el.classList.toggle('on', v > 0); };
-      el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); set(1); I.touch.active = true; e.preventDefault(); });
-      el.addEventListener('pointerup', () => set(0));
-      el.addEventListener('pointercancel', () => set(0));
-      el.addEventListener('lostpointercapture', () => set(0));
+      let pid = null;
+      const amount = (e) => {
+        if (!I.analogPedals) return 1;
+        const r = el.getBoundingClientRect();
+        const rel = U.clamp((e.clientY - r.top) / r.height, 0, 1);
+        return U.clamp(1.25 - rel * 1.05, 0.2, 1);
+      };
+      const set = (v) => { I.touch[key] = v; el.classList.toggle('on', v > 0); el.style.setProperty('--p', v.toFixed(2)); };
+      el.addEventListener('pointerdown', (e) => { pid = e.pointerId; el.setPointerCapture(e.pointerId); set(amount(e)); I.touch.active = true; e.preventDefault(); });
+      el.addEventListener('pointermove', (e) => { if (e.pointerId === pid) set(amount(e)); });
+      const off = (e) => { if (e.pointerId === pid) { pid = null; set(0); } };
+      el.addEventListener('pointerup', off);
+      el.addEventListener('pointercancel', off);
+      el.addEventListener('lostpointercapture', off);
     };
     pedal('#tc-gas', 'fwd');
     pedal('#tc-brake', 'back');

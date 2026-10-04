@@ -11,7 +11,20 @@ Browser mein chalne wala 3D truck simulator (Euro Truck Simulator jaisa). Koi in
 - **GitHub Pages:** Settings → Pages → branch chuno → root. Game ka link `https://<user>.github.io/<repo>/truck/` hoga.
 - **Local server (optional):** `npx http-server truck` aur phir `http://localhost:8080` kholo.
 
-Hardware acceleration (GPU) on hona chahiye. Phone pe screen ko landscape (tircha) rakho.
+Hardware acceleration (GPU) on hona chahiye. Phone pe screen ko landscape (tircha) rakho; tablet aada aur seedha
+(portrait) dono tarah chalta hai.
+
+## Phone / tablet (touch)
+
+| Cheez | Kaise |
+|---|---|
+| Steering | Neeche-baayein wheel ko ungli se ghumao, chhodne pe seedha ho jata hai |
+| Pedal | Analog: pedal ke upar dabao to pura gas/brake, neeche dabao to kam. BRAKE dabaye rakho to ruk kar reverse |
+| Buttons | Upar 16 button (ENG, PARK, LIGHT, HORN, indicator, TRAIL, OK, gear, CRUISE, RET, JOBS, MAP, CAM, MENU). Jo cheez on ho, uska button amber ho jata hai |
+| Layout | Phone: landscape. Tablet landscape: bade controls + poora HUD. Tablet portrait: buttons GPS ke neeche, speedometer wheel ke upar |
+| Settings | Touch controls size (Small → Extra large), touch wheel (Quick / Normal / Smooth), pedal (Analog / On-off) |
+| Extra | Full screen button (title aur pause menu), drive karte waqt screen band nahi hoti (wake lock), takkar pe vibration (Android) |
+| Quality | Phone pe apne-aap Low, tablet pe Medium |
 
 ## Features
 
