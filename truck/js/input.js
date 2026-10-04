@@ -124,7 +124,8 @@ G.Input = (() => {
     }
     if (I.mode === 'mouse' && steerK === 0) { steer = U.clamp(-(I.mouseX - 0.5) / 0.38, -1, 1); analog = true; }
     // gamepad
-    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    let pads = [];
+    try { pads = navigator.getGamepads ? navigator.getGamepads() : []; } catch (e) { pads = []; }
     const gp = pads && Array.from(pads).find((p) => p && p.connected);
     I.gamepad = gp ? gp.id : null;
     if (gp) {
