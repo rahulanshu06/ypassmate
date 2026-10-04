@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#07090d">
+<meta name="description" content="Loco Pilot — a browser-based Indian railway driving simulator with realistic air brakes, signalling, AI traffic, weather and day/night.">
+<title>Loco Pilot — Indian Railway Simulator</title>
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<div id="app"><div id="ui"></div></div>
+<div id="boot">
+  <div class="logo" style="text-align:center">
+    <div class="l1">LOCO <b>PILOT</b></div>
+    <div class="l2">Indian Railway Simulator</div>
+    <div class="l3">लोको पायलट</div>
+  </div>
+  <div class="boot-bar"><i></i></div>
+  <div class="boot-msg">Loading…</div>
+  <div class="boot-err"></div>
+</div>
+<noscript><p style="color:#fff;text-align:center;margin-top:40vh">Loco Pilot needs JavaScript enabled.</p></noscript>
+<script>
+  // ES modules cannot load from file:// — explain how to run it instead of failing silently.
+  if (location.protocol === 'file:') {
+    var e = document.querySelector('#boot .boot-err');
+    e.style.display = 'block';
+    e.innerHTML = '<b>Please open this game through a web server.</b><br>Browsers block ES modules on <code>file://</code>. ' +
+      'Run <code>npx serve .</code> (or <code>python3 -m http.server</code>) inside the <code>loco-pilot</code> folder and open the printed address, ' +
+      'or use the hosted GitHub Pages link.';
+  }
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
