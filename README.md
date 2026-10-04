@@ -1,8 +1,31 @@
-# Tap the Red Button
+# ypassmate
+
+Is repo mein do browser games hain:
+
+| Game | Folder | Kya hai |
+|---|---|---|
+| **Loco Pilot** | [`loco-pilot/`](loco-pilot/README.md) | Browser mein chalne wala Indian Railway driving simulator (WebGL / three.js) |
+| **Tap the Red Button** | root (`index.html`) | Smartphone reflex game |
+
+## Loco Pilot — Indian Railway Simulator
+
+Fictional EP60 electric loco ko 33.5 km ki fictional double line (Indrapuri Terminus → Vindhyanagar Jn) pe chalao:
+4-aspect signals, speed limits, A9/SA9 air brakes, timetable, AI trains, level crossings, mausam aur din-raat.
+Career (6 levels), Quick Drive, Scenarios, Training, Photo mode; English + Hindi UI.
+
+```bash
+cd loco-pilot && python3 -m http.server 8080   # phir http://localhost:8080 kholo
+```
+
+Controls, features aur architecture: [loco-pilot/README.md](loco-pilot/README.md).
+
+---
+
+## Tap the Red Button
 
 Smartphone ke liye banaya gaya reflex game. 6 yellow arcade buttons hain; har baar ek button red hota hai, use jitna jaldi ho sake tap karo.
 
-## Kaise khelein
+### Kaise khelein
 
 1. Time limit chuno: **10 sec**, **30 sec** ya **60 sec**.
 2. **Start** dabao. 3-2-1 ke baad game shuru hota hai.
@@ -12,7 +35,7 @@ Smartphone ke liye banaya gaya reflex game. 6 yellow arcade buttons hain; har ba
 
 Yellow ball pe tap karna "galat tap" gina jata hai. Har mode ka best score isi browser mein save rehta hai.
 
-## Chalana
+### Chalana
 
 Koi build step nahi hai. `index.html` ko kisi bhi browser mein kholo, ya GitHub Pages pe host karo
 (Settings → Pages → branch chuno → root folder).
