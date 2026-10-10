@@ -1,6 +1,7 @@
 @import url('fonts.css');
 
 :root {
+  color-scheme: dark;
   --ui-scale: 1;
   --bg-deep: #070a0f;
   --glass: rgba(12, 17, 25, 0.74);
@@ -392,6 +393,8 @@ select option { background: #121821; }
 .modal-back { position: absolute; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; z-index: 20; animation: fadein .2s; }
 .modal { width: min(520px, 92vw); padding: 1.2em 1.4em; }
 .modal h3 { margin: 0 0 .5em; font-family: var(--f-head); font-size: 1.5em; letter-spacing: .04em; }
+.shot { width: min(760px, 94vw); }
+.shot img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); -webkit-touch-callout: default; user-select: auto; -webkit-user-select: auto; }
 
 @media (max-width: 900px) {
   .grid.c3, .grid.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

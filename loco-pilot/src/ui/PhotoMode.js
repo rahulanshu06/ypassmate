@@ -41,16 +41,37 @@ export class PhotoMode {
     const prev = this.el.style.opacity;
     this.el.style.opacity = '0';
     r.render();
-    r.canvas.toBlob((blob) => {
-      this.el.style.opacity = prev;
-      if (!blob) return this.ui.toast('Capture failed');
+    let url = null;
+    try {
+      url = r.canvas.toDataURL('image/png');
+    } catch {
+      url = null;
+    }
+    this.el.style.opacity = prev;
+    if (!url) return this.ui.toast('Capture failed');
+    this.showShot(url);
+  }
+  /** Show the capture in a dialog. Sandboxed hosts block scripted downloads, so saving there is via the image's own menu. */
+  showShot(url) {
+    if (this.shotEl) this.shotEl.remove();
+    const canDownload = !window.LOCO_SANDBOXED;
+    const close = () => {
+      if (this.shotEl) this.shotEl.remove();
+      this.shotEl = null;
+    };
+    const download = () => {
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
+      a.href = url;
       a.download = `locopilot-${Date.now()}.png`;
       a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      this.ui.toast('Screenshot saved');
-    }, 'image/png');
+    };
+    this.shotEl = h('div.modal-back', { onclick: (e) => e.target === this.shotEl && close() },
+      h('div.modal.glass.shot',
+        h('h3', 'Screenshot'),
+        h('img', { src: url, alt: 'Captured view' }),
+        h('p.muted.small', canDownload ? 'Download it, or right-click / long-press the picture to save it.' : 'Right-click (or long-press) the picture and choose “Save image”.'),
+        h('div.row', canDownload ? h('button.btn.primary.small', { onclick: download }, 'Download PNG') : null, h('button.btn.small', { onclick: close }, 'Close'))));
+    this.ui.root.append(this.shotEl);
   }
   attach() {
     this.ui.hudLayer.append(this.el);
@@ -58,6 +79,8 @@ export class PhotoMode {
   }
   detach() {
     this.el.remove();
+    if (this.shotEl) this.shotEl.remove();
+    this.shotEl = null;
     window.removeEventListener('keydown', this.onKey);
     this.game.renderer.setDof(false);
   }
